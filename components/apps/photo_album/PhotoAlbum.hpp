@@ -43,7 +43,6 @@ private:
 
     static void on_dropdown_changed(lv_event_t *e);
     static void on_delete_clicked(lv_event_t *e);
-    static void on_print_clicked(lv_event_t *e);
     static void on_soti_clicked(lv_event_t *e);
     static void on_sync_clicked(lv_event_t *e);
     static void on_msgbox_event(lv_event_t *e);
@@ -55,7 +54,6 @@ private:
     lv_obj_t *_dd;
     lv_obj_t *_canvas;
     lv_obj_t *_btn_del;
-    lv_obj_t *_btn_print;
     lv_obj_t *_btn_soti;
     lv_obj_t *_btn_sync;
     lv_obj_t *_lbl_status;

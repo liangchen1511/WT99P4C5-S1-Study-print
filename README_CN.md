@@ -1,23 +1,43 @@
 # WT99P4C5-S1 示例项目
 
+**当前版本：V0.0.1**（SoTi 错题贴文本打印）
+
 [英文版本](./README.md)
+
+> 分支定位与已移除功能见 [`docs/DESKTOP_BRANCH.md`](docs/DESKTOP_BRANCH.md)；工程改动记录见 [`docs/OPTIMIZATION_CHANGELOG.md`](docs/OPTIMIZATION_CHANGELOG.md)。
 
 ## 项目简介
 
-这是一个基于WT99P4C5_S1的示例项目，采用ESP-Brookesia UI框架展示类似智能手机的用户界面。该项目集成了多种应用程序功能，包括音视频播放、摄像头、游戏、计算器等，并支持人脸检测和行人检测等计算机视觉功能。
+基于 **WT99P4C5-S1**（ESP32-P4 主控 + ESP32-C5 SDIO Wi‑Fi 协处理器）的 Brookesia 桌面固件：计算器、音乐/视频、相机、**搜题 SoTi**、**相册**、**家长聊天**、**热敏打印说明** 等。搜题结果可在答案页一键打印横向错题贴（ESC/POS 文本，非照片光栅）。
 
 ## 主要特性
 
-- 🎯 **智能手机式UI界面** - 基于ESP-Brookesia框架
-- 📱 **多种应用程序** - 计算器、音乐播放器、视频播放器、2048游戏、摄像头应用
-- 🤖 **AI视觉功能** - 人脸检测、行人检测
-- 🖥️ **高清显示** - 支持MIPI DSI接口显示屏
-- 🎵 **音频处理** - 支持MP3解码和音频播放
-- 🎬 **视频处理** - 支持H.264视频解码(目前仅支持mjpeg格式)
-- 💾 **多存储支持** - SPIFFS文件系统 + SD卡存储
-- 🌐 **网络连接** - WIFI,以太网支持
-- 📷 **摄像头支持** - 1280x960分辨率摄像头
-- 📚 **搜题 SoTi** - 拍照识题，经 Wi‑Fi 上传至云端豆包视觉 API，设备端显示纯文本答案（见下文）
+- 🎯 **智能手机式 UI** — ESP-Brookesia 框架
+- 📱 **桌面应用** — 计算器、音乐、视频（MJPEG）、2048、相机、相册、家长聊天、打印说明
+- 📚 **搜题 SoTi** — 拍照/相册选图 → 分片上传 → 豆包视觉 → 纯文本答案；答案页 **「仅题目」/「含答案」** 热敏打印
+- 🖨️ **热敏 ESC/POS** — UART TTL（J6）或 USB Host；UTF-8→GBK，58mm Font B 满宽（42 列）
+- 📷 **相机 / 相册** — 1280×960 预览与 JPEG；相册可 **搜题**、**同步** 家长站传图（无照片打印按钮）
+- 👪 **家长站** — 策略/policy、相册后台同步、聊天未读角标（SDIO 负载已做错峰节流）
+- 🖥️ **显示与音频** — MIPI DSI 1024×600；ES8311 + MP3/快门提示音
+- 💾 **存储** — SPIFFS + SD 卡
+- 🌐 **网络** — Wi‑Fi（**仅 2.4GHz**，经 C5）+ 以太网
+
+> **已移除（本分支不编译）**：人脸/行人检测、小智语音、双固件切换。详见 `docs/DESKTOP_BRANCH.md`。
+
+## 桌面 App 一览
+
+| App | 说明 |
+|-----|------|
+| Calculator | 计算器 |
+| MusicPlayer | SPIFFS 音乐 |
+| AppSettings | Wi‑Fi、亮度、音量等 |
+| Game2048 | 2048 |
+| Camera | 预览 / 拍照存 SD |
+| AppVideoPlayer | SD 卡 MJPEG |
+| **SoTi** | 搜题 + 答案页打印错题贴 |
+| **PhotoAlbum** | SD  JPEG 预览；**搜题** / **同步** / 删除 |
+| **Print** | 热敏机接线与 menuconfig 说明（非打印入口） |
+| **ParentChat** | 与家长站消息 |
 
 ## 搜题 (SoTi) 应用
 
@@ -25,27 +45,75 @@
 
 | 环节 | 说明 |
 |------|------|
-| 采集 | 搜题应用内快门快照，或相册选中 SD 卡 JPEG |
-| 上传 | ESP32-P4 经 **ESP-Hosted SDIO** 连 C5 Wi‑Fi，HTTP **分片上传**（`init` / `part` / `commit`） |
-| 云端 | ECS 上 `tools/soti-standalone-server`：二值化 JPEG → 火山方舟豆包识题 |
-| 显示 | LVGL 答案页；Markdown/LaTeX 在固件内转为纯文本（非真公式渲染） |
+| 采集 | 搜题快门快照，或 **相册** 选中 SD 卡 JPEG → 跳转 SoTi |
+| 上传 | P4 经 **ESP-Hosted SDIO** → C5 Wi‑Fi；HTTP **分片**（`init` / `part` / `commit`） |
+| 云端 | ECS `tools/soti-standalone-server`：二值化 JPEG → 火山方舟豆包 |
+| 显示 | LVGL 答案页；Markdown/LaTeX → 纯文本（非公式渲染） |
+| **打印** | 答案页 **「仅题目」「含答案」** → ESC/POS 文本条；服务器 `print` JSON 或本地 `【题目】` 切分 |
+
+### 识题模式与打印内容
+
+| 模式 | 仅题目 | 含答案 |
+|------|--------|--------|
+| 解题 solve | 【题目】 | 【解题步骤】+【答案】 |
+| 翻译 translate | 【原文】 | 【译文】+【说明】 |
+| 其他 | 按 `【】` 段落规则 | 同上 |
 
 ### 固件目录（`components/apps/SoTi/`）
 
 | 文件 | 作用 |
 |------|------|
-| `SoTi.cpp` | 预览、快门、加载/答案 UI；**上传与答案页期间暂停相机预览** |
-| `soti_r2_upload.cpp` | 分片 HTTP、解析 JSON `answer` |
-| `soti_answer_format.cpp` | 去掉 `###`、`\(...\)`、`\boldsymbol{}` 等，合并 OCR 数字间空格 |
-| `soti_config.h` | Worker URL、`SOTI_R2_UPLOAD_TOKEN`、是否用 ECS 公网 IP |
+| `SoTi.cpp` | 预览、快门、答案 UI、**打印按钮**；上传/答案页暂停预览 |
+| `soti_r2_upload.cpp` | 分片 HTTP；解析 `answer` 与 **`print`** |
+| `soti_print_sections.cpp` | 本地切分 `question` / `with_answer` |
+| `soti_answer_format.cpp` | Markdown/LaTeX → 屏显纯文本 |
+| `soti_config.h` | Worker URL、Token、ECS 公网 IP 开关 |
 
-字库子集：`components/lv_font_ui_zh/`（`symbols.txt` + `symbols_math.txt` + `symbols_hans_common.txt`），改字后执行 `python tools/gen_lv_font_ui_zh.py` 再编译烧录。
+字库：`components/lv_font_ui_zh/`；打印 GBK 映射：`tools/gen_utf8_gbk_table.py` → `components/usb_escpos_printer/utf8_gbk_map.inc`。
 
-### 服务器与配置
+### 服务器 JSON（打印字段）
 
-- 部署与 env：`tools/soti-standalone-server/README.md`
-- 设备端说明：`components/apps/SoTi/README.md`
-- 备案未完成时可先用公网 IP 访问 Nginx（`soti_config.h` 中 `SOTI_R2_UPLOAD_USE_ECS_PUBLIC_IP`）
+```json
+{
+  "ok": true,
+  "answer": "...",
+  "mode": "solve",
+  "print": { "question": "...", "with_answer": "..." }
+}
+```
+
+部署：`tools/soti-standalone-server/README.md` · 设备说明：`components/apps/SoTi/README.md`
+
+## 热敏打印 (ESC/POS)
+
+| 项目 | 说明 |
+|------|------|
+| 入口 | **SoTi 答案页**「仅题目 / 含答案」（相册已移除打印按钮） |
+| 链路 | `escpos_text_print.c`：Font B、GBK、`CONFIG_UART_ESC_POS_PRINT_COLS=42` |
+| 优先级 | **UART TTL > USB Host** |
+| TTL 接线 | J6：**GPIO4→RX**，**GPIO5←TX**，GND；**GPIO1→CTS**（或 CTS 接 3.3V） |
+| 波特率 | 默认 **115200 8N1**（EM5820H 无声可试 9600 或 menuconfig **Swap TX/RX**） |
+| menuconfig | `Component config → USB / BLE ESC/POS printer` |
+
+桌面 **Print** App 仅显示接线说明；`idf.py monitor` 可见 `uart_escpos` / `usb_escpos` 日志。
+
+## 相册与家长站
+
+| 功能 | 说明 |
+|------|------|
+| 相册 | SD 根目录 JPEG 列表、预览、删除 |
+| 搜题 | 选中照片 → 跳转 SoTi 上传 |
+| 同步 | 从家长站拉取待下载照片（后台 `alb_sync_bg`） |
+| 策略 | `parent_policy` 控制 App 可用时段/开关 |
+| 聊天 | `ParentChat` + 桌面未读角标 |
+
+息屏或 Wi‑Fi 不稳定时，固件会 **暂停** 上述后台 HTTP，亮屏 / 获 IP 后 **错峰恢复**，减轻 SDIO 重启。见 `camera_power_bridge.cpp`（`cam_pwr:` 日志）。
+
+## Wi‑Fi 连接建议
+
+- 协处理器 **ESP32-C5** 仅 **2.4GHz**；**不要连 5GHz**（11ac）。
+- 推荐：**2.4G + 11ax** 或 **11n 混合**；不稳定时关闭 2.4G Wi‑Fi6。
+- 加密：**WPA2-PSK**；信道固定 **1 / 6 / 11**，频宽 **20MHz** 更稳。
 
 ## 视频播放器功能
 
@@ -197,17 +265,22 @@ phone_wt99p4c5_s1_board/
 ├── components/                     # 自定义组件
 │   ├── apps/                       # 应用程序组件
 │   │   ├── calculator/             # 计算器应用
-│   │   ├── camera/                 # 摄像头应用（预览/拍照，供搜题等复用）
-│   │   ├── SoTi/                   # 搜题应用（上传 + 答案 UI）
+│   │   ├── camera/                 # 摄像头（预览/拍照，SoTi 共用）
+│   │   ├── SoTi/                   # 搜题 + 答案页错题贴打印
+│   │   ├── photo_album/            # 相册（搜题/同步/删除）
+│   │   ├── parent_chat/            # 家长聊天
+│   │   ├── print/                  # 热敏接线说明 App
 │   │   ├── game_2048/              # 2048游戏
 │   │   ├── music_player/           # 音乐播放器
-│   │   ├── setting/                # 设置应用
+│   │   ├── setting/                # 设置（Wi-Fi 等）
 │   │   └── video_player/           # 视频播放器
-│   ├── lv_font_ui_zh/              # UI 中文字库子集（搜题答案等）
-│   ├── human_face_detect/          # 人脸检测组件
-│   ├── pedestrian_detect/          # 行人检测组件
-│   ├── wt99p4c5_s1_board/          # 开发板支持包(BSP)
-│   └── bsp_extra/                  # 额外的BSP功能
+│   ├── usb_escpos_printer/         # ESC/POS UART/USB 文本打印
+│   ├── parent_album_sync/          # 家长站相册后台同步
+│   ├── parent_policy/              # 家长策略 / App 管控
+│   ├── power_manager/              # 息屏 / 背光
+│   ├── lv_font_ui_zh/              # UI 中文字库子集
+│   ├── wt99p4c5_s1_board/          # BSP（显示/SD/音频等）
+│   └── bsp_extra/                  # 扩展 BSP（播放器/快门声）
 ├── spiffs/                         # SPIFFS文件系统数据
 │   ├── music/                      # 音乐文件
 │   └── 2048/                       # 2048游戏资源
@@ -217,7 +290,9 @@ phone_wt99p4c5_s1_board/
 ├── partitions.csv                  # 分区表配置
 ├── tools/
 │   ├── gen_lv_font_ui_zh.py        # 生成 lv_font_ui_zh_22/30
+│   ├── gen_utf8_gbk_table.py       # 热敏打印 GBK 映射表
 │   └── soti-standalone-server/     # 搜题上传 + 豆包 API（ECS）
+├── docs/                           # 工程标准、改动记录、分支说明
 └── README.md                       # 项目说明文档
 ```
 
@@ -227,21 +302,25 @@ phone_wt99p4c5_s1_board/
 - **main.cpp**: 程序入口，初始化系统、显示、存储、网络等模块，并启动各个应用程序
 
 #### 2. 应用程序 (`components/apps/`)
-- **calculator/**: 计算器应用，支持基本四则运算
-- **camera/**: 摄像头驱动与预览管线（`Camera.cpp`，搜题/相机应用共用）
-- **SoTi/**: 搜题：JPEG 上传、答案格式化与全屏结果页
-- **game_2048/**: 经典2048数字游戏
-- **music_player/**: 音乐播放器，支持MP3格式
-- **setting/**: 系统设置应用
-- **video_player/**: 视频播放器，支持H.264格式
+- **calculator/**: 计算器
+- **camera/**: 预览/拍照管线（`Camera.cpp`，SoTi/相机共用）
+- **SoTi/**: 分片上传、答案格式化、**错题贴打印**
+- **photo_album/**: SD 相册；跳转搜题、家长站同步
+- **parent_chat/**: 家长端消息
+- **print/**: 热敏打印机接线说明（非打印业务入口）
+- **game_2048/**、**music_player/**、**setting/**、**video_player/**: 同上
 
-#### 3. AI视觉组件
-- **human_face_detect/**: 人脸检测算法实现
-- **pedestrian_detect/**: 行人检测算法实现
+#### 3. 打印与家长站组件
+- **usb_escpos_printer/**: ESC/POS 文本（`escpos_text_print.c`）、UART/USB 驱动
+- **parent_album_sync/**: 家长站相册轮询与下载
+- **parent_policy/**: 家长策略与 App 管控
+- **power_manager/**: 息屏；与 `camera_power_bridge` 联动 SDIO 后台节流
 
 #### 4. 硬件抽象层
-- **wt99p4c5_s1_board/**: 开发板专用BSP，提供硬件初始化和驱动接口
-- **bsp_extra/**: 扩展的BSP功能模块
+- **wt99p4c5_s1_board/**: BSP
+- **bsp_extra/**: 音频播放、相机快门提示音
+
+> **说明**：本分支不编译 `human_face_detect` / `pedestrian_detect`（见 `docs/DESKTOP_BRANCH.md`）。
 
 #### 5. 存储和资源
 - **spiffs/**: 内置文件系统，存储应用资源和配置文件
@@ -276,6 +355,7 @@ idf.py monitor
 - 摄像头分辨率配置
 - 音频采样率设置
 - Wi-Fi和以太网配置
+- **USB / BLE ESC/POS printer**（TTL 引脚、波特率、**文本行宽 42 列**）
 
 ## 组件库版本要求
 

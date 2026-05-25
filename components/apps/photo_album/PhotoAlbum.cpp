@@ -21,20 +21,11 @@
 
 #include "jpeg_decoder.h"
 
-#include "sdkconfig.h"
-#include "escpos_feature_flags.h"
-#include "uart_escpos_printer.h"
-#include "usb_escpos_printer.h"
-#if WT_USE_BLE_ESC_POS_PRINTER
-#include "ble_escpos_printer.h"
-#endif
-
 #include "PhotoAlbum.hpp"
 #include "camera/Camera.hpp"
 #include "parent_album_sync.h"
 #include "parent_chat/parent_chat_api.hpp"
 #include "parent_policy.hpp"
-#include "power_manager.h"
 #include "SoTi/SoTi.hpp"
 #include "lv_font_ui_zh.h"
 
@@ -59,11 +50,6 @@ void album_status_async_cb(void *ud)
     }
     free(c);
 }
-
-struct album_print_job {
-    PhotoAlbum *app;
-    char path[512];
-};
 
 struct sync_status_async_ctx {
     PhotoAlbum *app;
@@ -140,45 +126,6 @@ static void album_sync_task(void *arg)
     vTaskDelete(nullptr);
 }
 
-void album_print_task(void *arg)
-{
-    album_print_job *job = (album_print_job *)arg;
-    PhotoAlbum *app = job->app;
-    char path_copy[sizeof(job->path)];
-    memcpy(path_copy, job->path, sizeof(path_copy));
-    free(job);
-
-    /* Prefer TTL UART when wired: USB stack may attach non-printer devices with bulk OUT. */
-    esp_err_t err = ESP_ERR_NOT_FOUND;
-    const char *via = nullptr;
-    if (uart_escpos_printer_ready()) {
-        via = "uart";
-        err = uart_escpos_print_jpeg_file(path_copy);
-    } else if (usb_escpos_printer_ready()) {
-        via = "usb";
-        err = usb_escpos_print_jpeg_file(path_copy);
-    }
-#if WT_USE_BLE_ESC_POS_PRINTER && defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE) && CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE
-    else if (ble_escpos_printer_ready()) {
-        via = "ble";
-        err = ble_escpos_print_jpeg_file(path_copy);
-    }
-#endif
-    ESP_LOGI(TAG, "album_print %s path=%s err=%s", via ? via : "none", path_copy, esp_err_to_name(err));
-    /* Status strings must use glyphs present in lv_font_ui_zh_30 subset (see lv_font_ui_zh_30.c). */
-    const char *msg = "打印 OK";
-    if (err == ESP_ERR_NOT_FOUND) {
-        msg = "无打印机";
-    } else if (err == ESP_ERR_INVALID_STATE) {
-        msg = "检查打印";
-    } else if (err != ESP_OK) {
-        msg = "打印失败";
-    }
-    app->postAlbumStatusAsync(msg);
-    power_manager_unblock_sleep("print");
-    vTaskDelete(nullptr);
-}
-
 } // namespace
 
 static void photo_album_apply_cjk_font(lv_obj_t *obj)
@@ -205,7 +152,6 @@ PhotoAlbum::PhotoAlbum(int so_ti_app_id)
       _dd(nullptr),
       _canvas(nullptr),
       _btn_del(nullptr),
-      _btn_print(nullptr),
       _btn_soti(nullptr),
       _btn_sync(nullptr),
       _lbl_status(nullptr),
@@ -361,11 +307,9 @@ void PhotoAlbum::refreshAfterSync(bool ok)
             rebuild_dropdown();
             if (_entries.empty()) {
                 lv_obj_add_state(_btn_del, LV_STATE_DISABLED);
-                lv_obj_add_state(_btn_print, LV_STATE_DISABLED);
                 lv_obj_add_state(_btn_soti, LV_STATE_DISABLED);
             } else {
                 lv_obj_clear_state(_btn_del, LV_STATE_DISABLED);
-                lv_obj_clear_state(_btn_print, LV_STATE_DISABLED);
                 lv_obj_clear_state(_btn_soti, LV_STATE_DISABLED);
                 lv_dropdown_set_selected(_dd, 0);
                 load_preview_for_index(0);
@@ -579,17 +523,6 @@ bool PhotoAlbum::run(void)
     lv_obj_set_style_text_font(lbl_del, &lv_font_ui_zh_22, 0);
     lv_obj_add_event_cb(_btn_del, on_delete_clicked, LV_EVENT_CLICKED, this);
 
-    _btn_print = lv_btn_create(top);
-    lv_obj_set_height(_btn_print, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_hor(_btn_print, 8, 0);
-    lv_obj_set_style_pad_ver(_btn_print, 3, 0);
-    lv_obj_set_style_min_width(_btn_print, 0, 0);
-    lv_obj_t *lbl_print = lv_label_create(_btn_print);
-    lv_label_set_text(lbl_print, "打印");
-    lv_obj_center(lbl_print);
-    lv_obj_set_style_text_font(lbl_print, &lv_font_ui_zh_22, 0);
-    lv_obj_add_event_cb(_btn_print, on_print_clicked, LV_EVENT_CLICKED, this);
-
     _btn_soti = lv_btn_create(top);
     lv_obj_set_height(_btn_soti, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_hor(_btn_soti, 8, 0);
@@ -646,7 +579,6 @@ bool PhotoAlbum::run(void)
     if (_entries.empty()) {
         set_status("SD 卡根目录无 JPEG（检查是否挂载 /sdcard）");
         lv_obj_add_state(_btn_del, LV_STATE_DISABLED);
-        lv_obj_add_state(_btn_print, LV_STATE_DISABLED);
         lv_obj_add_state(_btn_soti, LV_STATE_DISABLED);
     } else {
         rebuild_dropdown();
@@ -761,42 +693,6 @@ void PhotoAlbum::on_soti_clicked(lv_event_t *e)
     }
 }
 
-void PhotoAlbum::on_print_clicked(lv_event_t *e)
-{
-    PhotoAlbum *app = (PhotoAlbum *)lv_event_get_user_data(e);
-    if (app == nullptr || app->_dd == nullptr || app->_entries.empty()) {
-        return;
-    }
-
-    const uint16_t sel = lv_dropdown_get_selected(app->_dd);
-    if (sel >= app->_entries.size()) {
-        return;
-    }
-
-    char path[kPathMax];
-    const int plen = snprintf(path, sizeof(path), "%s/%s", BSP_SD_MOUNT_POINT, app->_entries[sel].c_str());
-    if (plen <= 0 || plen >= (int)sizeof(path)) {
-        app->set_status("路径过长");
-        return;
-    }
-
-    album_print_job *job = (album_print_job *)calloc(1, sizeof(album_print_job));
-    if (job == nullptr) {
-        app->set_status("内存不足");
-        return;
-    }
-    job->app = app;
-    snprintf(job->path, sizeof(job->path), "%s", path);
-    /* Status font (lv_font_ui_zh_30) lacks 正/在/… — use subset glyphs only. */
-    app->set_status("打印");
-    if (xTaskCreate(album_print_task, "album_print", 10240, job, 5, nullptr) != pdTRUE) {
-        free(job);
-        app->set_status("无法启动打印任务");
-    } else {
-        power_manager_block_sleep("print");
-    }
-}
-
 void PhotoAlbum::on_delete_clicked(lv_event_t *e)
 {
     PhotoAlbum *app = (PhotoAlbum *)lv_event_get_user_data(e);
@@ -845,12 +741,10 @@ void PhotoAlbum::on_msgbox_event(lv_event_t *e)
             app->rebuild_dropdown();
             if (app->_entries.empty()) {
                 lv_obj_add_state(app->_btn_del, LV_STATE_DISABLED);
-                lv_obj_add_state(app->_btn_print, LV_STATE_DISABLED);
                 lv_obj_add_state(app->_btn_soti, LV_STATE_DISABLED);
                 app->set_status("已无 JPEG");
             } else {
                 lv_obj_clear_state(app->_btn_del, LV_STATE_DISABLED);
-                lv_obj_clear_state(app->_btn_print, LV_STATE_DISABLED);
                 lv_obj_clear_state(app->_btn_soti, LV_STATE_DISABLED);
                 uint16_t next = idx >= app->_entries.size() ? app->_entries.size() - 1 : idx;
                 lv_dropdown_set_selected(app->_dd, next);

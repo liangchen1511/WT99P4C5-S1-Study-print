@@ -17,6 +17,7 @@
 #include "boot_splash.h"
 #include "parent_policy.hpp"
 #include "parent_album_sync.h"
+#include "camera/camera_power_bridge.h"
 #include "power_manager.h"
 #include "escpos_feature_flags.h"
 #include "uart_escpos_printer.h"
@@ -180,6 +181,7 @@ extern "C" void app_main(void)
 
     parent_policy_init();
     parent_album_sync_bg_start();
+    camera_power_bridge_init();
 
     ESP_ERROR_CHECK(power_manager_init());
     power_manager_set_backlight_percent(100);

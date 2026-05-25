@@ -44,11 +44,11 @@ bool Print::run(void)
 
     lv_obj_t *lbl = lv_label_create(_root);
     lv_label_set_text(lbl,
-                      "USB：热敏接 USB-A 主机口；相册选图点「打印」。\n"
-                      "TTL：J6 GPIO4→打印机RX，GPIO5←打印机TX，GND 共地；EM5820H 115200 8N1。\n"
-                      "EM5820H 常需 CTS：GPIO1(J6 IO1)接打印机 CTS，或 CTS 直接接 J6 的 3.3V。\n"
-                      "上电约 5 秒自动打 HELLO/123/测试票；无反应可开 SWAP_TX_RX。\n"
-                      "蓝牙热敏：当前默认关闭（escpos_feature_flags.h）。");
+                      "打印入口：SoTi 答案页「仅题目 / 含答案」。\n"
+                      "USB：热敏接 USB-A 主机口。\n"
+                      "TTL：J6 GPIO4→打印机RX，GPIO5←打印机TX，GND 共地；115200 8N1。\n"
+                      "EM5820H 常需 CTS：GPIO1(J6 IO1)接打印机 CTS，或 CTS 接 3.3V。\n"
+                      "无声可试 9600 或 menuconfig 开 SWAP_TX_RX。");
     lv_obj_set_style_text_font(lbl, &lv_font_ui_zh_22, 0);
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);

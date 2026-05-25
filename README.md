@@ -1,38 +1,119 @@
 # WT99P4C5-S1 Example Project
 
+**Current version: V0.0.1** (SoTi error-notebook text printing)
+
 [中文版本](./README_CN.md)
+
+> Branch scope and removed features: [`docs/DESKTOP_BRANCH.md`](docs/DESKTOP_BRANCH.md). Change log: [`docs/OPTIMIZATION_CHANGELOG.md`](docs/OPTIMIZATION_CHANGELOG.md).
 
 ## Project Overview
 
-This is a sample project based on the WT99P4C5_S1 development board, featuring a smartphone-like user interface built with the ESP-Brookesia UI framework. The project integrates various application functions including audio/video playback, camera, games, calculator, and supports computer vision features such as face detection and pedestrian detection.
+Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi‑Fi co-processor): calculator, music/video, camera, **SoTi question search**, **photo album**, **parent chat**, and a **thermal printer wiring** help app. SoTi answers can be printed as horizontal text strips (ESC/POS text, not photo raster).
 
 ## Key Features
 
-- 🎯 **Smartphone-style UI Interface** - Built on ESP-Brookesia framework
-- 📱 **Multiple Applications** - Calculator, music player, video player, 2048 game, camera app
-- 🤖 **AI Vision Features** - Face detection and pedestrian detection
-- 🖥️ **High-definition Display** - Supports MIPI DSI interface display
-- 🎵 **Audio Processing** - Supports MP3 decoding and audio playback
-- 🎬 **Video Processing** - Supports H.264 video decoding (currently supports MJPEG format only)
-- 💾 **Multi-storage Support** - SPIFFS file system + SD card storage
-- 🌐 **Network Connectivity** - WiFi and Ethernet support
-- 📷 **Camera Support** - 1280x960 resolution camera
-- 📚 **SoTi (Question Search)** - Capture/upload JPEG, Doubao vision on ECS, plain-text answer UI (see below)
+- 🎯 **Smartphone-style UI** — ESP-Brookesia framework
+- 📱 **Desktop apps** — Calculator, music, video (MJPEG), 2048, camera, album, parent chat, print help
+- 📚 **SoTi** — Capture or pick JPEG → segmented upload → Doubao vision → plain-text answer; **Print question / Print with answer** on answer screen
+- 🖨️ **ESC/POS thermal** — UART TTL (J6) or USB host; UTF-8→GBK; 58 mm Font B full width (42 columns)
+- 📷 **Camera / album** — 1280×960 preview & JPEG; album **SoTi** / **Sync** / delete (no photo print button)
+- 👪 **Parent station** — Policy, background album sync, chat unread badge (SDIO traffic staggered)
+- 🖥️ **Display & audio** — MIPI DSI 1024×600; ES8311 + MP3 / shutter click
+- 💾 **Storage** — SPIFFS + SD card
+- 🌐 **Network** — Wi‑Fi (**2.4 GHz only** via C5) + Ethernet
+
+> **Removed in this branch** (not built): face/pedestrian detection, Xiaozhi voice, dual-firmware switch. See `docs/DESKTOP_BRANCH.md`.
+
+## Desktop Apps
+
+| App | Description |
+|-----|-------------|
+| Calculator | Basic calculator |
+| MusicPlayer | SPIFFS music |
+| AppSettings | Wi‑Fi, brightness, volume |
+| Game2048 | 2048 game |
+| Camera | Preview / save JPEG to SD |
+| AppVideoPlayer | SD card MJPEG |
+| **SoTi** | Question search + error-note printing |
+| **PhotoAlbum** | SD JPEG preview; **SoTi** / **Sync** / delete |
+| **Print** | Thermal wiring & menuconfig notes (not the print entry point) |
+| **ParentChat** | Parent-station messaging |
 
 ## SoTi Application
 
+### Flow
+
 | Stage | Description |
 |-------|-------------|
-| Capture | Shutter in SoTi app, or JPEG from gallery on SD card |
-| Upload | ESP32-P4 via **ESP-Hosted SDIO** Wi‑Fi; HTTP **segmented** upload (`init` / `part` / `commit`) |
-| Cloud | `tools/soti-standalone-server` on ECS: binarize → Volcengine Doubao vision |
-| Display | LVGL answer screen; firmware strips Markdown/LaTeX to plain text (no real math renderer) |
+| Capture | SoTi shutter, or **album** JPEG on SD → open SoTi |
+| Upload | P4 over **ESP-Hosted SDIO** → C5 Wi‑Fi; HTTP **segments** (`init` / `part` / `commit`) |
+| Cloud | ECS `tools/soti-standalone-server`: binarize → Volcengine Doubao |
+| Display | LVGL answer screen; Markdown/LaTeX → plain text (no math renderer) |
+| **Print** | Answer screen **Print question / Print with answer**; server `print` JSON or local `【题目】` split |
 
-**Firmware:** `components/apps/SoTi/` (`SoTi.cpp`, `soti_r2_upload.cpp`, `soti_answer_format.cpp`, `soti_config.h`). **Camera preview is paused** during upload and on the answer screen until the user taps **Back**.
+### Modes vs print sections
 
-**Font subset:** `components/lv_font_ui_zh/` — run `python tools/gen_lv_font_ui_zh.py` after editing `symbols*.txt`.
+| Mode | Question only | With answer |
+|------|---------------|-------------|
+| solve | 【题目】 | 【解题步骤】+【答案】 |
+| translate | 【原文】 | 【译文】+【说明】 |
+| others | `【】` section rules | same |
+
+### Firmware (`components/apps/SoTi/`)
+
+| File | Role |
+|------|------|
+| `SoTi.cpp` | Preview, shutter, answer UI, **print buttons**; pauses preview during upload/answer |
+| `soti_r2_upload.cpp` | Segmented HTTP; parses `answer` and **`print`** |
+| `soti_print_sections.cpp` | Local `question` / `with_answer` split |
+| `soti_answer_format.cpp` | Markdown/LaTeX → on-screen plain text |
+| `soti_config.h` | Worker URL, token, ECS public IP toggle |
+
+Fonts: `components/lv_font_ui_zh/`. Print GBK map: `tools/gen_utf8_gbk_table.py` → `components/usb_escpos_printer/utf8_gbk_map.inc`.
+
+### Server JSON (print field)
+
+```json
+{
+  "ok": true,
+  "answer": "...",
+  "mode": "solve",
+  "print": { "question": "...", "with_answer": "..." }
+}
+```
 
 **Server:** `tools/soti-standalone-server/README.md` · **Device:** `components/apps/SoTi/README.md`
+
+## Thermal printing (ESC/POS)
+
+| Item | Notes |
+|------|--------|
+| Entry | **SoTi answer screen** — Print question / Print with answer (album print button removed) |
+| Stack | `escpos_text_print.c`: Font B, GBK, `CONFIG_UART_ESC_POS_PRINT_COLS=42` |
+| Priority | **UART TTL > USB host** |
+| TTL wiring | J6: **GPIO4→RX**, **GPIO5←TX**, GND; **GPIO1→CTS** (or strap CTS to 3.3 V) |
+| Baud | Default **115200 8N1** (try 9600 or **Swap TX/RX** if silent) |
+| menuconfig | `Component config → USB / BLE ESC/POS printer` |
+
+The desktop **Print** app shows wiring help only; check `uart_escpos` / `usb_escpos` in serial monitor.
+
+## Photo album & parent station
+
+| Feature | Notes |
+|---------|--------|
+| Album | List/preview/delete JPEGs on SD root |
+| SoTi | Selected photo → SoTi upload |
+| Sync | Pull pending photos from parent station (`alb_sync_bg`) |
+| Policy | `parent_policy` app schedule / toggles |
+| Chat | `ParentChat` + launcher unread badge |
+
+Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resumed** after IP / screen on to reduce SDIO restarts. See `camera_power_bridge.cpp` (`cam_pwr:` logs).
+
+## Wi‑Fi tips
+
+- Co-processor **ESP32-C5** is **2.4 GHz only** — do **not** use 5 GHz (11ac).
+- Prefer **2.4G + 11ax** or **11n mixed**; disable 2.4G Wi‑Fi 6 if unstable.
+- Use **WPA2-PSK**; fixed channel **1 / 6 / 11**; **20 MHz** width is often more stable.
 
 ## Video Player Feature
 
@@ -183,17 +264,22 @@ phone_wt99p4c5_s1_board/
 ├── components/                     # Custom components
 │   ├── apps/                       # Application components
 │   │   ├── calculator/             # Calculator application
-│   │   ├── camera/                 # Camera pipeline (shared by SoTi, etc.)
-│   │   ├── SoTi/                   # Question search (upload + answer UI)
+│   │   ├── camera/                 # Camera pipeline (shared with SoTi)
+│   │   ├── SoTi/                   # Question search + error-note print
+│   │   ├── photo_album/            # Album (SoTi / sync / delete)
+│   │   ├── parent_chat/            # Parent chat
+│   │   ├── print/                  # Thermal wiring help app
 │   │   ├── game_2048/              # 2048 game
 │   │   ├── music_player/           # Music player
-│   │   ├── setting/                # Settings application
+│   │   ├── setting/                # Settings (Wi-Fi, etc.)
 │   │   └── video_player/           # Video player
+│   ├── usb_escpos_printer/         # ESC/POS UART/USB text print
+│   ├── parent_album_sync/          # Parent-station album sync
+│   ├── parent_policy/              # Parent policy / app control
+│   ├── power_manager/              # Screen off / backlight
 │   ├── lv_font_ui_zh/              # Chinese UI font subset
-│   ├── human_face_detect/          # Face detection component
-│   ├── pedestrian_detect/          # Pedestrian detection component
-│   ├── wt99p4c5_s1_board/          # Board Support Package (BSP)
-│   └── bsp_extra/                  # Additional BSP functions
+│   ├── wt99p4c5_s1_board/          # BSP
+│   └── bsp_extra/                  # Extended BSP (player / shutter)
 ├── spiffs/                         # SPIFFS file system data
 │   ├── music/                      # Music files
 │   └── 2048/                       # 2048 game resources
@@ -203,7 +289,9 @@ phone_wt99p4c5_s1_board/
 ├── partitions.csv                  # Partition table configuration
 ├── tools/
 │   ├── gen_lv_font_ui_zh.py        # Generate lv_font_ui_zh_22/30
+│   ├── gen_utf8_gbk_table.py       # Thermal print GBK map
 │   └── soti-standalone-server/     # Upload service + Doubao API (ECS)
+├── docs/                           # Engineering standards, changelog, branch notes
 └── README.md                       # Project documentation
 ```
 
@@ -213,23 +301,27 @@ phone_wt99p4c5_s1_board/
 - **main.cpp**: Program entry point, initializes system, display, storage, network modules, and starts various applications
 
 #### 2. Applications (`components/apps/`)
-- **calculator/**: Calculator application supporting basic arithmetic operations
-- **camera/**: Camera driver and preview (`Camera.cpp`, shared with SoTi)
-- **SoTi/**: JPEG upload, answer formatting, full-screen result UI
-- **game_2048/**: Classic 2048 number game
-- **music_player/**: Music player supporting MP3 format
-- **setting/**: System settings application
-- **video_player/**: Video player supporting H.264 format
+- **calculator/**: Calculator
+- **camera/**: Preview/capture pipeline (`Camera.cpp`, shared with SoTi)
+- **SoTi/**: Segmented upload, answer formatting, **error-note printing**
+- **photo_album/**: SD album; jump to SoTi, parent sync
+- **parent_chat/**: Parent messaging
+- **print/**: Thermal wiring help (not the print workflow entry)
+- **game_2048/**, **music_player/**, **setting/**, **video_player/**: as named
 
-#### 3. AI Vision Components
-- **human_face_detect/**: Face detection algorithm implementation
-- **pedestrian_detect/**: Pedestrian detection algorithm implementation
+#### 3. Print & parent-station components
+- **usb_escpos_printer/**: ESC/POS text (`escpos_text_print.c`), UART/USB drivers
+- **parent_album_sync/**: Parent-station album poll & download
+- **parent_policy/**: Parent policy & app gating
+- **power_manager/**: Screen off; SDIO background throttling via `camera_power_bridge`
 
-#### 4. Hardware Abstraction Layer
-- **wt99p4c5_s1_board/**: Board-specific BSP providing hardware initialization and driver interfaces
-- **bsp_extra/**: Extended BSP function modules
+#### 4. Hardware abstraction layer
+- **wt99p4c5_s1_board/**: BSP
+- **bsp_extra/**: Audio playback, camera shutter sound
 
-#### 5. Storage and Resources
+> **Note:** This branch does not build `human_face_detect` / `pedestrian_detect` (see `docs/DESKTOP_BRANCH.md`).
+
+#### 5. Storage and resources
 - **spiffs/**: Built-in file system storing application resources and configuration files
 - **mp4/**: Video file storage directory
 
@@ -262,6 +354,7 @@ Configure through `idf.py menuconfig`:
 - Camera resolution configuration
 - Audio sampling rate settings
 - Wi-Fi and Ethernet configuration
+- **USB / BLE ESC/POS printer** (TTL pins, baud, **42 text columns**)
 
 ## Component Library Version Requirements
 

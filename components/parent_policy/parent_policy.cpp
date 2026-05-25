@@ -355,7 +355,7 @@ static esp_err_t fetch_policy_http(void)
 static void poll_task(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(8000));
+    vTaskDelay(pdMS_TO_TICKS(20000));
     for (;;) {
         if (!s_poll_paused) {
             if (fetch_policy_http() != ESP_OK) {

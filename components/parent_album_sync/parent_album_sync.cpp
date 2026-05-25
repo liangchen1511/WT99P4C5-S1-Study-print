@@ -463,7 +463,7 @@ esp_err_t parent_album_sync_run_once(void)
 static void bg_task(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(8000));
+    vTaskDelay(pdMS_TO_TICKS(20000));
     while (s_bg_run) {
         if (s_paused) {
             vTaskDelay(pdMS_TO_TICKS(2000));

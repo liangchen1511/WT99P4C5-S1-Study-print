@@ -406,7 +406,7 @@ bool parent_chat_fetch_unread(ParentChatUnread *unread)
 static void bg_poll_task(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(15000));
     while (s_bg_run) {
         if (s_bg_paused) {
             vTaskDelay(pdMS_TO_TICKS(2000));
