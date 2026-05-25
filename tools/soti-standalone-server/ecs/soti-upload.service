@@ -1,0 +1,16 @@
+[Unit]
+Description=SoTi JPEG upload + Doubao vision (soti_upload_server.py)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/soti
+EnvironmentFile=/etc/soti-upload.env
+ExecStart=/usr/bin/python3 /opt/soti/soti_upload_server.py
+Restart=on-failure
+RestartSec=5
+# 日志：journalctl -u soti-upload -f
+
+[Install]
+WantedBy=multi-user.target

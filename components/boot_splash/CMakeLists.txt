@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "boot_splash.c"
+        "assets/img_boot_chip.c"
+        "assets/img_boot_text.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        lvgl__lvgl
+        wt99p4c5_s1_board
+)

@@ -1,0 +1,78 @@
+menu "USB / BLE ESC/POS printer"
+
+    config USB_ESC_POS_CDC_BAUD
+        int "USB CDC line baud for ESC/POS (e.g. EM5820H)"
+        default 9600
+        range 1200 921600
+        help
+            SET_LINE_CODING baud on the CDC Communication interface.
+            EM5820H ships at 9600 8N1; set 115200 if the module was reconfigured.
+
+    config UART_ESC_POS_BAUD
+        int "UART TTL ESC/POS baud (Dongwei demo default 115200)"
+        default 115200
+        range 1200 921600
+        help
+            8N1, no flow control. Dongwei ESP32-IDF printer SDK demos use 115200.
+            EM5820H and some modules ship at 9600 — lower this if the printer is silent.
+            Connect ESP32 TX → printer RX, ESP32 RX → printer TX, GND common.
+            Self-test via USB does not prove TTL wiring — use the module TTL connector.
+
+    config UART_ESC_POS_SWAP_TX_RX
+        bool "Swap TX/RX GPIO (try if printer is silent)"
+        default n
+        help
+            If normal wiring prints nothing, enable and reflash (no need to swap wires).
+
+    config UART_ESC_POS_CTS_EN_GPIO
+        int "GPIO output HIGH to printer CTS (-1=disable)"
+        default 1
+        range -1 55
+        help
+            EM5820H / many embedded modules ignore serial data unless CTS is asserted.
+            Wire this GPIO to the printer CTS pin, OR strap printer CTS to J6 3.3V (pin 1/3).
+            WT99P4C5 J6 IO1 = GPIO1. Set -1 if you hard-wire CTS to 3.3V only.
+
+    config UART_ESC_POS_BOOT_TEST
+        bool "Print Dongwei-style test ticket once after boot"
+        default n
+        help
+            Sends formatted text (demo/1 打印格式化文本) over TTL UART a few seconds after init.
+
+    config UART_ESC_POS_TX_GPIO
+        int "UART TX GPIO (to printer RX)"
+        range -1 55
+        default 4
+
+    config UART_ESC_POS_RX_GPIO
+        int "UART RX GPIO (from printer TX)"
+        range -1 55
+        default 5
+
+    config UART_ESC_POS_PORT
+        int "UART controller index (ESP32-P4: use 2 if UART1 pins clash with I2S on GPIO10-13)"
+        default 2
+        range 0 4
+        help
+            HP UART port number. UART1 defaults to GPIO10/11 which overlap I2S on this BSP;
+            UART2+ with uart_set_pin to GPIO4/5 is the safer default.
+
+    config UART_ESC_POS_PRINT_COLS
+        int "Text strip columns (58mm Font B, CJK=2 cols/char)"
+        default 42
+        range 16 48
+        help
+            Font B on 58mm paper: ~42 ASCII or ~21 CJK chars per line.
+            ASCII=1 col, CJK=2 cols. Lower for 48mm or Font A.
+
+    config BLE_ESC_POS_NAME_FILTER
+        string "BLE thermal printer: match advertised name contains (optional)"
+        default ""
+        help
+            Case-insensitive substring of the BLE advertised name.
+            If empty, the firmware connects to the first peripheral that advertises the
+            Nordic UART Service (NUS), which is common for BLE serial thermal printers.
+            Dongwei UART printers use the same ESC/POS bytes; over BLE they are sent as
+            writes to the NUS RX characteristic.
+
+endmenu

@@ -1,0 +1,35 @@
+---
+description: WT99P4C5-S1 工程改动标准 — 每次优化必须同步更新 CHANGELOG
+alwaysApply: true
+---
+
+# WT99P4C5-S1 工程改动标准
+
+## 改动文档（必须）
+
+每次代码或配置改动，**必须**在 [`docs/OPTIMIZATION_CHANGELOG.md`](../docs/OPTIMIZATION_CHANGELOG.md) 追加一条记录。
+
+每条记录必填：
+
+| 字段 | 说明 |
+|------|------|
+| 阶段编号 | 如 `[阶段1.1]` |
+| 改了什么 | 一句话摘要 |
+| 改动位置 | 文件路径 + 行号/函数名 + 变更说明 |
+| 原因 | 为何改动 |
+| 预期影响 | Flash / PSRAM / Internal RAM / 性能 |
+| 验证 | build、size、功能回归清单 |
+
+## 配置改动
+
+`sdkconfig` / `sdkconfig.defaults*` 变更须写明 `CONFIG_*` 键名及 **旧值 → 新值**。
+
+## 资源删除/排除
+
+列出被删或 CMake 排除的文件名，并注明预估 Flash 节省。
+
+## 阶段验证
+
+每阶段完成后运行 `idf.py build` 与 `idf.py size`，将结果写入 CHANGELOG「验证记录」节。
+
+详细说明见 [`docs/ENGINEERING_STANDARD.md`](../docs/ENGINEERING_STANDARD.md)。

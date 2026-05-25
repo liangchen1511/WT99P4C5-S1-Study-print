@@ -1,0 +1,19 @@
+menu "Power manager (screen lock)"
+
+config POWER_MANAGER_ENABLE
+    bool "Enable automatic screen lock"
+    default y
+
+config POWER_MANAGER_IDLE_TIMEOUT_MS
+    int "Screen off after idle (ms)"
+    default 60000
+    range 5000 600000
+    depends on POWER_MANAGER_ENABLE
+
+config POWER_MANAGER_TOUCH_POLL_MS
+    int "Touch poll interval while screen off (ms)"
+    default 200
+    range 50 1000
+    depends on POWER_MANAGER_ENABLE
+
+endmenu

@@ -1,0 +1,65 @@
+{
+  "stats": { "today": 12, "week": 48, "online": true },
+  "policy_name": "工作日学习",
+  "device_id": "WT99-DEMO-01",
+  "history": [
+    {
+      "id": 1,
+      "created_at": 1715905920,
+      "mode": "solve",
+      "preview": "【题目:】小明有 24 个苹果，分给 3 人每人几个？\n【解题步骤:】24 ÷ 3 = 8\n【最终答案:】每人 8 个。",
+      "answer_text": "【题目:】小明有 24 个苹果，分给 3 人每人几个？\n【解题步骤:】24 ÷ 3 = 8\n【最终答案:】每人 8 个。",
+      "ok": 1,
+      "thumb_url": null
+    },
+    {
+      "id": 2,
+      "created_at": 1715902200,
+      "mode": "translate",
+      "preview": "【译文:】The early bird catches the worm.",
+      "answer_text": "【原文:】早起的鸟儿有虫吃。\n【译文:】The early bird catches the worm.",
+      "ok": 1,
+      "thumb_url": null
+    },
+    {
+      "id": 3,
+      "created_at": 1715898600,
+      "mode": "tutor",
+      "preview": "这道题考查的是分数加减，先通分再相加…",
+      "answer_text": "这道题考查的是分数加减。先找最小公倍数通分，分子相加后化简。",
+      "ok": 1,
+      "thumb_url": null
+    }
+  ],
+  "policy": {
+    "version": 1,
+    "timezone": "Asia/Shanghai",
+    "demo_force_study": false,
+    "rules": [
+      {
+        "name": "周末自由",
+        "days": [6, 7],
+        "start": "00:00",
+        "end": "23:59",
+        "allow_apps": ["*"],
+        "deny_apps": []
+      },
+      {
+        "name": "工作日学习",
+        "days": [1, 2, 3, 4, 5],
+        "start": "19:00",
+        "end": "21:00",
+        "allow_apps": ["soti", "calculator", "settings", "camera", "photo_album"],
+        "deny_apps": ["game_2048", "video", "music"]
+      }
+    ],
+    "device_lock_outside_rules": false,
+    "app_toggles": {
+      "game_2048": false,
+      "video": false,
+      "music": false,
+      "camera": true,
+      "print": true
+    }
+  }
+}

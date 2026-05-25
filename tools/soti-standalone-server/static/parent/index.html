@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>学习守护 · 家长控制台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/parent/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="view-login" class="view view--active">
+      <div class="login-card">
+        <div class="login-brand">
+          <div class="brand-icon" aria-hidden="true">🛡</div>
+          <h1>学习守护</h1>
+          <p class="muted">WT99 智能学习设备 · 家长控制台</p>
+        </div>
+        <form id="login-form" class="login-form">
+          <label>
+            <span>设备码</span>
+            <input type="text" id="device-code" placeholder="WT99-DEMO-01" autocomplete="off" required />
+            <small class="hint">与设备固件 SOTI_DEVICE_ID 一致</small>
+          </label>
+          <label>
+            <span>家长密码</span>
+            <input type="password" id="password" placeholder="请输入密码" required />
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="remember" checked />
+            <span>记住本设备</span>
+          </label>
+          <button type="submit" class="btn btn--primary btn--block">进入控制台</button>
+          <p id="login-error" class="error-msg" hidden></p>
+        </form>
+        <p class="login-footer muted">未备案域名请使用 ECS 公网 IP 访问</p>
+      </div>
+    </section>
+
+    <div id="view-app" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <span class="brand-icon sm" aria-hidden="true">🛡</span>
+          <span class="sidebar-brand-text">学习守护</span>
+        </div>
+        <nav class="nav">
+          <button type="button" class="nav-item nav-item--active" data-view="dashboard">
+            <span class="nav-icon">▣</span> 总览
+          </button>
+          <button type="button" class="nav-item" data-view="history">
+            <span class="nav-icon">☰</span> 搜题记录
+          </button>
+          <button type="button" class="nav-item" data-view="policy">
+            <span class="nav-icon">⚙</span> 管控策略
+          </button>
+          <button type="button" class="nav-item" data-view="chat">
+            <span class="nav-icon">💬</span> 亲子聊天
+            <span class="nav-badge" id="nav-chat-badge" hidden></span>
+          </button>
+          <button type="button" class="nav-item" data-view="album">
+            <span class="nav-icon">🖼</span> 相册传图
+          </button>
+        </nav>
+        <div class="sidebar-foot muted">
+          <span id="sidebar-device">—</span>
+          <span class="dot" id="sidebar-online"></span>
+          <span id="sidebar-online-text">离线</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <h2 id="page-title">总览</h2>
+          <span class="device-pill" id="top-device-pill">WT99-DEMO-01</span>
+          <button type="button" class="btn btn--ghost" id="btn-logout">退出</button>
+        </header>
+
+        <section id="panel-dashboard" class="panel panel--active">
+          <div class="stats-row">
+            <article class="stat-card">
+              <p class="stat-label">今日搜题</p>
+              <p class="stat-value" id="stat-today">—</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">本周搜题</p>
+              <p class="stat-value" id="stat-week">—</p>
+            </article>
+            <article class="stat-card stat-card--accent">
+              <p class="stat-label">当前策略</p>
+              <p class="stat-value stat-value--sm" id="stat-policy">—</p>
+            </article>
+          </div>
+          <div class="dash-grid">
+            <section class="card">
+              <div class="card-head">
+                <h3>最近搜题</h3>
+                <button type="button" class="link-btn" data-goto="history">查看全部</button>
+              </div>
+              <ul id="recent-list" class="history-list"></ul>
+            </section>
+            <section class="card">
+              <div class="card-head"><h3>快捷管控</h3></div>
+              <div id="quick-toggles" class="toggle-list"></div>
+              <p class="rule-chip" id="rule-chip">—</p>
+              <button type="button" class="btn btn--primary btn--block" data-goto="policy">编辑时段策略</button>
+              <button type="button" class="btn btn--secondary btn--block" id="btn-force-study">立即启用学习时段</button>
+              <button type="button" class="btn btn--ghost btn--block" id="btn-end-study" hidden>结束学习时段</button>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-history" class="panel" hidden>
+          <div class="toolbar">
+            <select id="filter-mode" class="select">
+              <option value="">全部模式</option>
+              <option value="solve">解题</option>
+              <option value="translate">翻译</option>
+              <option value="tutor">讲解</option>
+              <option value="grade">批改</option>
+              <option value="summary">摘要</option>
+            </select>
+            <button type="button" class="btn btn--ghost" id="btn-refresh-history">刷新</button>
+          </div>
+          <ul id="history-list" class="history-list history-list--full"></ul>
+        </section>
+
+        <section id="panel-chat" class="panel" hidden>
+          <section class="card chat-card">
+            <div class="chat-head">
+              <h3>与孩子聊天</h3>
+              <span class="muted" id="chat-online">—</span>
+            </div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-compose">
+              <textarea id="chat-input" rows="2" maxlength="500" placeholder="输入消息，Enter 发送"></textarea>
+              <button type="button" class="btn btn--primary" id="btn-chat-send">发送</button>
+            </div>
+          </section>
+        </section>
+
+        <section id="panel-album" class="panel" hidden>
+          <section class="card">
+            <h3>传图到设备 SD 卡</h3>
+            <p class="muted">支持 JPG/PNG/WebP；服务器自动转为 JPG 并缩小到设备可显示尺寸，再同步到 SD 卡相册。</p>
+            <label class="album-upload-field">
+              <span class="form-label">选择照片</span>
+              <input type="file" id="album-file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple />
+            </label>
+            <label>
+              <span class="form-label">文件名（可选）</span>
+              <input type="text" id="album-name" placeholder="留空则用原文件名" />
+            </label>
+            <button type="button" class="btn btn--primary btn--block" id="btn-album-upload">上传到设备队列</button>
+            <p id="album-upload-msg" class="hint" hidden></p>
+            <ul id="album-upload-list" class="history-list"></ul>
+          </section>
+        </section>
+
+        <section id="panel-policy" class="panel" hidden>
+          <section class="card">
+            <h3>应用开关</h3>
+            <p class="muted">开启=允许使用；关闭=始终禁止。与「立即启用学习时段」无关，保存后生效</p>
+            <div id="policy-toggles" class="toggle-list"></div>
+          </section>
+          <section class="card">
+            <div class="policy-section-head">
+              <h3>学习时段</h3>
+              <label class="switch switch--inline">
+                <input type="checkbox" id="study-enabled" checked />
+                <span></span>
+              </label>
+            </div>
+            <p class="muted">在选定星期与时间段内，禁止孩子使用勾选的娱乐应用</p>
+            <div id="study-form" class="study-form">
+              <div class="form-block">
+                <span class="form-label">星期</span>
+                <div class="day-chips" id="study-days">
+                  <button type="button" class="day-chip day-chip--on" data-day="1">一</button>
+                  <button type="button" class="day-chip day-chip--on" data-day="2">二</button>
+                  <button type="button" class="day-chip day-chip--on" data-day="3">三</button>
+                  <button type="button" class="day-chip day-chip--on" data-day="4">四</button>
+                  <button type="button" class="day-chip day-chip--on" data-day="5">五</button>
+                  <button type="button" class="day-chip" data-day="6">六</button>
+                  <button type="button" class="day-chip" data-day="7">日</button>
+                </div>
+              </div>
+              <div class="form-block form-block--row">
+                <label>
+                  <span class="form-label">开始</span>
+                  <input type="time" id="study-start" class="input-time" value="19:00" />
+                </label>
+                <label>
+                  <span class="form-label">结束</span>
+                  <input type="time" id="study-end" class="input-time" value="21:00" />
+                </label>
+              </div>
+              <div class="form-block">
+                <span class="form-label">时段内禁止使用</span>
+                <div class="check-grid" id="study-deny-apps">
+                  <label class="check-pill check-pill--on"><input type="checkbox" value="game_2048" checked /> 2048</label>
+                  <label class="check-pill check-pill--on"><input type="checkbox" value="video" checked /> 视频</label>
+                  <label class="check-pill check-pill--on"><input type="checkbox" value="music" checked /> 音乐</label>
+                </div>
+              </div>
+              <label class="checkbox-row weekend-row">
+                <input type="checkbox" id="weekend-free" checked />
+                <span>周六、周日全天不限制（自由使用）</span>
+              </label>
+            </div>
+            <div class="policy-actions">
+              <button type="button" class="btn btn--primary" id="btn-save-policy">保存策略</button>
+              <p id="policy-save-msg" class="hint" hidden></p>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <aside id="drawer" class="drawer" hidden>
+      <div class="drawer-backdrop" id="drawer-backdrop"></div>
+      <div class="drawer-panel">
+        <button type="button" class="drawer-close" id="drawer-close">×</button>
+        <h3>记录详情</h3>
+        <img id="drawer-thumb" class="drawer-thumb" alt="" hidden />
+        <pre id="drawer-body" class="drawer-body"></pre>
+      </div>
+    </aside>
+  </div>
+  <script src="/parent/app.js"></script>
+</body>
+</html>
