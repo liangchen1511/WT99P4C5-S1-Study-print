@@ -6,6 +6,7 @@
 
 #include "Print.hpp"
 #include "lv_font_ui_zh.h"
+#include "parent_guard.hpp"
 
 LV_IMG_DECLARE(img_app_print);
 
@@ -23,6 +24,9 @@ bool Print::init(void)
 
 bool Print::run(void)
 {
+    if (!parent_guard_app_run("print")) {
+        return false;
+    }
     lv_area_t area = getVisualArea();
     const lv_coord_t vw = area.x2 - area.x1;
     const lv_coord_t vh = area.y2 - area.y1;

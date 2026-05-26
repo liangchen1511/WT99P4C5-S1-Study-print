@@ -29,7 +29,7 @@
 | App | 说明 |
 |-----|------|
 | Calculator | 计算器 |
-| MusicPlayer | SPIFFS 音乐 |
+| MusicPlayer | SD 卡根目录 MP3/WAV |
 | AppSettings | Wi‑Fi、亮度、音量等 |
 | Game2048 | 2048 |
 | Camera | 预览 / 拍照存 SD |
@@ -115,6 +115,12 @@
 - 推荐：**2.4G + 11ax** 或 **11n 混合**；不稳定时关闭 2.4G Wi‑Fi6。
 - 加密：**WPA2-PSK**；信道固定 **1 / 6 / 11**，频宽 **20MHz** 更稳。
 
+## 音乐播放器
+
+- 将 **`.mp3` / `.wav`** 放在 **SD 卡根目录**（与 `.mjpeg` 可共存；播放器只扫描音频）
+- 无 SD 卡或根目录无音频时，打开音乐 App 会提示说明
+- 2048 音效仍使用 SPIFFS `/2048/*.mp3`，与音乐 App 无关
+
 ## 视频播放器功能
 
 ### 支持的视频格式
@@ -122,7 +128,8 @@
 >[!NOTE]
 >**视频播放说明**
 >- 需要将 MJPEG 格式的视频保存到 SD 卡上，并将 SD 卡插入 SD 卡槽
->- 目前仅支持 MJPEG 格式的视频
+>- 目前仅支持 MJPEG 格式的视频（SD **根目录** `*.mjpeg`）
+>- 竖屏视频会在横屏 1024×600 上 **等比缩放并加黑边**，完整显示画面
 >- 插入 SD 卡后，视频播放 APP 将自动出现在界面上
 
 ### 视频格式转换
@@ -136,20 +143,25 @@
 >sudo apt install ffmpeg
 >```
 >
->2. 使用 ffmpeg 进行视频转换：
+>2. 横屏（推荐，文件更小）：
 >```bash
 >ffmpeg -i YOUR_INPUT_FILE_NAME.mp4 -vcodec mjpeg -q:v 2 -vf "scale=1024:600" -acodec copy YOUR_OUTPUT_FILE_NAME.mjpeg
+>```
+>
+>3. 竖屏源视频（设备会自动 letterbox，也可预转）：
+>```bash
+>ffmpeg -i YOUR_INPUT_FILE_NAME.mp4 -vcodec mjpeg -q:v 2 -vf "scale=600:1024:force_original_aspect_ratio=decrease,pad=600:1024:(ow-iw)/2:(oh-ih)/2" -an YOUR_OUTPUT_FILE_NAME.mjpeg
 >```
 
 ### 视频播放器使用方法
 
 1. **准备视频文件**
    - 使用上述方法将视频文件转换为 MJPEG 格式
-   - 确保分辨率调整为 1024x600 以获得最佳显示效果
+   - 横屏建议 **1024×600**；竖屏可直接使用，固件会缩放适配
 
 2. **设置SD卡**
    - 将格式化的 SD 卡插入 SD 卡槽
-   - 将转换后的 MJPEG 文件复制到 SD 卡中
+   - 将转换后的 MJPEG 文件复制到 SD 卡**根目录**
 
 3. **启动视频播放器**
    - 视频播放器应用会自动读取 SD 卡

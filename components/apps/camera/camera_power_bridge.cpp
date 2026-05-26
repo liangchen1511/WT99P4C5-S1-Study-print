@@ -198,7 +198,7 @@ extern "C" void power_manager_on_screen_off(void)
 extern "C" void power_manager_on_screen_on(void)
 {
     ensure_bg_guard();
-    (void)Camera::ensurePreviewStreaming();
+    /* 不在亮屏时无条件开 CSI，避免与音乐/视频 MJPEG 抢 PSRAM；Camera/SoTi 前台自行 ensurePreview */
     s_screen_allows = true;
     schedule_bg_resume(3000, "screen on");
 }

@@ -18,11 +18,16 @@
 #include "esp_lvgl_simple_player/esp_lvgl_simple_player.h"
 #include "VideoPlayer.hpp"
 #include "parent_guard.hpp"
+#include "camera/Camera.hpp"
+#include "audio_player.h"
+#include "esp_heap_caps.h"
 
-#define APP_BGM_DIR   BSP_SPIFFS_MOUNT_POINT "/music"
 #define APP_MAX_VIDEO_NUM           (15)
 #define APP_VIDEO_FRAME_BUF_SIZE    (720 * 1280 * BSP_LCD_BITS_PER_PIXEL / 8)
 #define APP_CACHE_BUF_SIZE          (64 * 1024)
+#define APP_VIDEO_DROPDOWN_H        (80)
+#define APP_VIDEO_CONTROLS_H        (85)
+#define APP_VIDEO_VIEWPORT_H        (BSP_LCD_V_RES - APP_VIDEO_DROPDOWN_H - APP_VIDEO_CONTROLS_H)
 
 using namespace std;
 
@@ -73,6 +78,13 @@ bool AppVideoPlayer::run(void)
     if (!parent_guard_app_run("video")) {
         return false;
     }
+
+    ESP_LOGI(TAG, "run: heap=%u min=%u", (unsigned)esp_get_free_heap_size(),
+             (unsigned)esp_get_minimum_free_heap_size());
+    Camera::stopPreviewStreamingIfRunning();
+    audio_player_stop();
+    esp_lvgl_simple_player_pause_background();
+
     app_show_ui();
 
     return true;
@@ -123,9 +135,7 @@ void AppVideoPlayer::app_show_ui(void)
     /* Rows: vertical scroll so tall video + controls stay reachable after playback */
     lv_obj_t *cont_col = lv_obj_create(lv_scr_act());
     lv_obj_set_size(cont_col, BSP_LCD_H_RES, BSP_LCD_V_RES);
-    lv_obj_add_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(cont_col, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(cont_col, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(cont_col, 0, 0);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -178,9 +188,13 @@ void AppVideoPlayer::app_show_ui(void)
         .cache_buff_size = APP_CACHE_BUF_SIZE,
         .cache_buff_in_psram = true,
         .screen_width = BSP_LCD_H_RES,
-        .screen_height = (BSP_LCD_V_RES / 2),
+        .screen_height = APP_VIDEO_VIEWPORT_H + APP_VIDEO_CONTROLS_H,
+        .viewport_width = BSP_LCD_H_RES,
+        .viewport_height = APP_VIDEO_VIEWPORT_H,
         .flags = {
-            .auto_height = true,
+            .auto_width = false,
+            .auto_height = false,
+            .fit_letterbox = true,
         },
     };
     esp_lvgl_simple_player_create(&player_cfg);

@@ -165,6 +165,17 @@ esp_err_t bsp_extra_player_del(void);
 esp_err_t bsp_extra_file_instance_init(const char *path, file_iterator_instance_t **ret_instance);
 
 /**
+ * @brief Initialize a file iterator for audio files only (.mp3 / .wav) in a directory.
+ *
+ * Skips subdirectories and non-audio extensions (e.g. .mjpeg on SD root).
+ *
+ * @param path Directory to scan (e.g. BSP_SD_MOUNT_POINT).
+ * @param ret_instance Iterator instance compatible with file_iterator_* APIs.
+ * @return ESP_OK on success, ESP_FAIL if path invalid, SD missing, or no audio files.
+ */
+esp_err_t bsp_extra_audio_file_instance_init(const char *path, file_iterator_instance_t **ret_instance);
+
+/**
  * @brief Play the audio file at the specified index in the file iterator
  *
  * @param instance The file iterator instance.

@@ -7,8 +7,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <math.h>
+#include <dirent.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -280,6 +282,23 @@ esp_err_t bsp_extra_player_del(void)
     return ESP_OK;
 }
 
+void file_iterator_delete(file_iterator_instance_t *i)
+{
+    if (i == NULL) {
+        return;
+    }
+    if (i->list != NULL) {
+        for (size_t j = 0; j < i->count; j++) {
+            free(i->list[j]);
+        }
+        free(i->list);
+    }
+    if (i->directory_path != NULL) {
+        free((void *)i->directory_path);
+    }
+    free(i);
+}
+
 esp_err_t bsp_extra_file_instance_init(const char *path, file_iterator_instance_t **ret_instance)
 {
     ESP_RETURN_ON_FALSE(path, ESP_FAIL, TAG, "path is NULL");
@@ -290,6 +309,102 @@ esp_err_t bsp_extra_file_instance_init(const char *path, file_iterator_instance_
 
     *ret_instance = file_iterator;
 
+    return ESP_OK;
+}
+
+static bool bsp_extra_is_audio_filename(const char *name)
+{
+    const char *ext = strrchr(name, '.');
+    if (ext == NULL) {
+        return false;
+    }
+    return (strcasecmp(ext, ".mp3") == 0) || (strcasecmp(ext, ".wav") == 0);
+}
+
+static bool bsp_extra_dirent_is_audio(const struct dirent *ent)
+{
+    if (ent == NULL || ent->d_name[0] == '\0') {
+        return false;
+    }
+    if (ent->d_name[0] == '.') {
+        return false;
+    }
+    if (ent->d_type == DT_DIR) {
+        return false;
+    }
+    return bsp_extra_is_audio_filename(ent->d_name);
+}
+
+esp_err_t bsp_extra_audio_file_instance_init(const char *path, file_iterator_instance_t **ret_instance)
+{
+    ESP_RETURN_ON_FALSE(path, ESP_FAIL, TAG, "path is NULL");
+    ESP_RETURN_ON_FALSE(ret_instance, ESP_FAIL, TAG, "ret_instance is NULL");
+
+    DIR *dir = opendir(path);
+    ESP_RETURN_ON_FALSE(dir, ESP_FAIL, TAG, "opendir failed: %s", path);
+
+    size_t count = 0;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (bsp_extra_dirent_is_audio(ent)) {
+            count++;
+        }
+    }
+    closedir(dir);
+
+    if (count == 0) {
+        ESP_LOGW(TAG, "No .mp3/.wav in %s", path);
+        return ESP_FAIL;
+    }
+
+    file_iterator_instance_t *iter = calloc(1, sizeof(file_iterator_instance_t));
+    ESP_RETURN_ON_FALSE(iter, ESP_FAIL, TAG, "calloc iterator failed");
+
+    iter->count = count;
+    iter->index = 0;
+    iter->list = calloc(count, sizeof(char *));
+    if (iter->list == NULL) {
+        free(iter);
+        return ESP_FAIL;
+    }
+
+    iter->directory_path = strdup(path);
+    if (iter->directory_path == NULL) {
+        free(iter->list);
+        free(iter);
+        return ESP_FAIL;
+    }
+
+    dir = opendir(path);
+    if (dir == NULL) {
+        free((void *)iter->directory_path);
+        free(iter->list);
+        free(iter);
+        return ESP_FAIL;
+    }
+
+    size_t idx = 0;
+    while ((ent = readdir(dir)) != NULL && idx < count) {
+        if (!bsp_extra_dirent_is_audio(ent)) {
+            continue;
+        }
+        iter->list[idx] = strdup(ent->d_name);
+        if (iter->list[idx] == NULL) {
+            closedir(dir);
+            for (size_t j = 0; j < idx; j++) {
+                free(iter->list[j]);
+            }
+            free(iter->list);
+            free((void *)iter->directory_path);
+            free(iter);
+            return ESP_FAIL;
+        }
+        ESP_LOGI(TAG, "Audio file: %s", iter->list[idx]);
+        idx++;
+    }
+    closedir(dir);
+
+    *ret_instance = iter;
     return ESP_OK;
 }
 

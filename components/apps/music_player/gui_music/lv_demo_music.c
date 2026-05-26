@@ -96,7 +96,8 @@ static const uint32_t time_list[] = {
 
 static lv_color_t original_screen_bg_color;
 
-static uint32_t active_track_cnt = 5;
+uint32_t music_track_cnt = 0;
+static uint32_t active_track_cnt = 0;
 static file_iterator_instance_t *_file_iterator = NULL;
 static const char * artist_list_name = "Unknown Artist";
 static const char * genre_list_name = "Unknown Genre";
@@ -115,6 +116,7 @@ void lv_demo_music(lv_obj_t *parent, file_iterator_instance_t *file_iterator)
     _file_iterator = file_iterator;
 
     active_track_cnt = file_iterator_get_count(_file_iterator);
+    music_track_cnt = active_track_cnt;
 
     original_screen_bg_color = lv_obj_get_style_bg_color(parent, 0);
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x343247), 0);
@@ -151,8 +153,9 @@ const char * _lv_demo_music_get_title(uint32_t track_id)
 
     if (track_id < active_track_cnt) {
         return file_iterator_get_name_from_index(_file_iterator, track_id);
-    } else if (track_id < active_track_cnt + sizeof(title_list) / sizeof(title_list[0])) {
-        return title_list[track_id - active_track_cnt];
+    }
+    if (active_track_cnt == 0 && track_id < sizeof(title_list) / sizeof(title_list[0])) {
+        return title_list[track_id];
     }
 
     return NULL;
@@ -166,8 +169,9 @@ const char * _lv_demo_music_get_artist(uint32_t track_id)
 
     if (track_id < active_track_cnt) {
         return artist_list_name;
-    } else if (track_id < active_track_cnt + sizeof(artist_list) / sizeof(artist_list[0])) {
-        return artist_list[track_id - active_track_cnt];
+    }
+    if (active_track_cnt == 0 && track_id < sizeof(artist_list) / sizeof(artist_list[0])) {
+        return artist_list[track_id];
     }
 
     return artist_list_name;
@@ -180,9 +184,10 @@ const char * _lv_demo_music_get_genre(uint32_t track_id)
     }
 
     if (track_id < active_track_cnt) {
-    return genre_list_name;
-    } else if (track_id < active_track_cnt + sizeof(genre_list) / sizeof(genre_list[0])) {
-        return genre_list[track_id - active_track_cnt];
+        return genre_list_name;
+    }
+    if (active_track_cnt == 0 && track_id < sizeof(genre_list) / sizeof(genre_list[0])) {
+        return genre_list[track_id];
     }
 
     return genre_list_name;
@@ -195,9 +200,11 @@ uint32_t _lv_demo_music_get_track_length(uint32_t track_id)
     }
 
     if (track_id < active_track_cnt) {
-    return time_list_num;
-    } else if (track_id < active_track_cnt + sizeof(time_list) / sizeof(time_list[0])) {
-        return time_list[track_id - active_track_cnt];
+        /* 真实文件：进度条仅作计时显示，不依赖假时长 */
+        return 0;
+    }
+    if (active_track_cnt == 0 && track_id < sizeof(time_list) / sizeof(time_list[0])) {
+        return time_list[track_id];
     }
 
     return time_list_num;

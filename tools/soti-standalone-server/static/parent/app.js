@@ -20,8 +20,9 @@
     print: "打印",
   };
 
-  const STUDY_ALLOW_APPS = ["soti", "calculator", "settings", "camera", "photo_album"];
-  const LOCK_APPS = ["game_2048", "video", "music"];
+  /** 学习时段：allow * + deny 勾选 = 仅禁止勾选项（不用白名单） */
+  const STUDY_DENY_DEFAULT = ["game_2048", "video", "music"];
+  const LOCK_APPS = ["game_2048", "video", "music", "camera", "print"];
 
   const state = {
     token: localStorage.getItem(STORAGE_TOKEN) || "",
@@ -243,7 +244,7 @@
       btn.classList.toggle("day-chip--on", days.includes(d));
     });
 
-    const deny = new Set(study.deny_apps || ["game_2048", "video", "music"]);
+    const deny = new Set(study.deny_apps || STUDY_DENY_DEFAULT);
     $("#study-deny-apps").querySelectorAll(".check-pill").forEach((label) => {
       const input = label.querySelector("input");
       input.checked = deny.has(input.value);
@@ -275,7 +276,7 @@
           days,
           start: $("#study-start").value || "19:00",
           end: $("#study-end").value || "21:00",
-          allow_apps: STUDY_ALLOW_APPS.slice(),
+          allow_apps: ["*"],
           deny_apps: deny,
         });
       }
@@ -585,7 +586,7 @@
       await savePolicy(state.policy);
       updateStudyModeUI();
       alert(
-        "已启用学习时段：设备将暂时锁定 2048/视频/音乐。应用开关不会关闭，点「结束学习时段」或重新打开应用开关即可恢复。"
+        "已启用学习时段：设备将暂时锁定 2048/视频/音乐/相机/打印。应用开关不会关闭，点「结束学习时段」或重新打开应用开关即可恢复。"
       );
     } catch (e) {
       alert(e.message);

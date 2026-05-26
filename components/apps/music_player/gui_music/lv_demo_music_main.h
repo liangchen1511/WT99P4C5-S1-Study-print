@@ -17,11 +17,6 @@ extern "C" {
 #include "bsp_board_extra.h"
 #if APP_DEMO_MUSIC_ENABLE
 
-/*********************
- *      DEFINES
- *********************/
-#define ACTIVE_TRACK_CNT    5
-
 /**********************
  *      TYPEDEFS
  **********************/

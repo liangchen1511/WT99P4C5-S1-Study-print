@@ -393,8 +393,9 @@ extern "C" bool parent_policy_is_app_allowed(const char *app_id)
     }
     set_block_reason("");
     if (s_demo_force_study) {
-        if (strcmp(app_id, "game_2048") == 0 || strcmp(app_id, "video") == 0 || strcmp(app_id, "music") == 0) {
-            set_block_reason("学习时段：娱乐应用已锁定");
+        if (strcmp(app_id, "game_2048") == 0 || strcmp(app_id, "video") == 0 || strcmp(app_id, "music") == 0 ||
+            strcmp(app_id, "camera") == 0 || strcmp(app_id, "print") == 0) {
+            set_block_reason("学习时段：非学习应用已锁定");
             return false;
         }
     }

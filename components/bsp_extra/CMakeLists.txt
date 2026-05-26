@@ -15,6 +15,6 @@ endforeach()
 idf_component_register(
     SRCS ${SRCS}
     INCLUDE_DIRS ${INCLUDE_DIRS}
-    REQUIRES driver espressif__esp_codec_dev wt99p4c5_s1_board
+    REQUIRES driver espressif__esp_codec_dev wt99p4c5_s1_board chmorgan__esp-file-iterator
     PRIV_REQUIRES esp_timer fatfs esp_psram esp_mm
 )

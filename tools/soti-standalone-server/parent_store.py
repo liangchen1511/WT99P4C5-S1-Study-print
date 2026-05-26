@@ -42,7 +42,7 @@ DEFAULT_POLICY: dict[str, Any] = {
             "days": [1, 2, 3, 4, 5],
             "start": "19:00",
             "end": "21:00",
-            "allow_apps": ["soti", "calculator", "settings", "camera", "photo_album"],
+            "allow_apps": ["*"],
             "deny_apps": ["game_2048", "video", "music"],
         },
     ],
@@ -55,6 +55,29 @@ DEFAULT_POLICY: dict[str, Any] = {
         "print": True,
     },
 }
+
+
+def _migrate_study_deny_camera_print(policy: dict[str, Any]) -> dict[str, Any]:
+    """旧版学习时段用窄 allow 白名单会误拦视频/音乐；统一为 allow * + deny 列表。"""
+    rules = policy.get("rules")
+    if not isinstance(rules, list):
+        return policy
+    out = dict(policy)
+    new_rules: list[Any] = []
+    changed = False
+    for rule in rules:
+        if not isinstance(rule, dict):
+            new_rules.append(rule)
+            continue
+        r = dict(rule)
+        allow = list(r.get("allow_apps") or [])
+        if allow and "*" not in allow:
+            r["allow_apps"] = ["*"]
+            changed = True
+        new_rules.append(r)
+    if changed:
+        out["rules"] = new_rules
+    return out
 
 
 def _connect() -> sqlite3.Connection:
@@ -326,13 +349,15 @@ def get_policy(device_id: str) -> dict[str, Any]:
     if row is None:
         return dict(DEFAULT_POLICY)
     try:
-        return json.loads(row["json"])
+        pol = json.loads(row["json"])
     except json.JSONDecodeError:
         return dict(DEFAULT_POLICY)
+    return _migrate_study_deny_camera_print(pol)
 
 
 def save_policy(device_id: str, policy: dict[str, Any]) -> None:
     device_id = (device_id or DEFAULT_DEVICE_ID).strip() or DEFAULT_DEVICE_ID
+    policy = _migrate_study_deny_camera_print(policy)
     with _lock:
         c = _connect()
         _upsert_policy_row(c, device_id, policy)

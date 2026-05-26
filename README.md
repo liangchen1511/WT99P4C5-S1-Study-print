@@ -29,7 +29,7 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 | App | Description |
 |-----|-------------|
 | Calculator | Basic calculator |
-| MusicPlayer | SPIFFS music |
+| MusicPlayer | SD root MP3/WAV |
 | AppSettings | Wi‑Fi, brightness, volume |
 | Game2048 | 2048 game |
 | Camera | Preview / save JPEG to SD |
@@ -115,6 +115,12 @@ Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resume
 - Prefer **2.4G + 11ax** or **11n mixed**; disable 2.4G Wi‑Fi 6 if unstable.
 - Use **WPA2-PSK**; fixed channel **1 / 6 / 11**; **20 MHz** width is often more stable.
 
+## Music Player
+
+- Put **`.mp3` / `.wav`** on the **SD card root** (can coexist with `.mjpeg`; only audio files are listed)
+- Without SD or audio files, the music app shows a short hint
+- 2048 SFX still use SPIFFS `/2048/*.mp3`
+
 ## Video Player Feature
 
 ### Supported Video Formats
@@ -122,7 +128,8 @@ Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resume
 >[!NOTE]
 >**Video Playback Instructions**
 >- Save MJPEG format videos to the SD card and insert it into the SD card slot
->- Currently only supports MJPEG format videos
+>- Currently only supports MJPEG format videos (SD **root** `*.mjpeg`)
+>- Portrait videos are **letterboxed** on the 1024×600 landscape display
 >- After inserting the SD card, the video player APP will automatically appear on the interface
 
 ### Video Format Conversion
@@ -136,20 +143,25 @@ Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resume
 >sudo apt install ffmpeg
 >```
 >
->2. Use ffmpeg for video conversion:
+>2. Landscape (recommended):
 >```bash
 >ffmpeg -i YOUR_INPUT_FILE_NAME.mp4 -vcodec mjpeg -q:v 2 -vf "scale=1024:600" -acodec copy YOUR_OUTPUT_FILE_NAME.mjpeg
+>```
+>
+>3. Portrait source (device letterboxes; optional pre-transcode):
+>```bash
+>ffmpeg -i YOUR_INPUT_FILE_NAME.mp4 -vcodec mjpeg -q:v 2 -vf "scale=600:1024:force_original_aspect_ratio=decrease,pad=600:1024:(ow-iw)/2:(oh-ih)/2" -an YOUR_OUTPUT_FILE_NAME.mjpeg
 >```
 
 ### Video Player Usage
 
 1. **Prepare Video Files**
    - Convert your video files to MJPEG format using the method above
-   - Ensure the resolution is scaled to 1024x600 for optimal display
+   - Landscape **1024×600** is optimal; portrait works with in-firmware scaling
 
 2. **Setup SD Card**
    - Insert a formatted SD card into the SD card slot
-   - Copy the converted MJPEG files to the SD card
+   - Copy the converted MJPEG files to the SD card **root**
 
 3. **Launch Video Player**
    - The video player application will automatically read the SD card

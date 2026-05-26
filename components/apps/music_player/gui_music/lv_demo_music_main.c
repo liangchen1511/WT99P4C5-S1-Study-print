@@ -19,6 +19,8 @@
 #include "bsp_board_extra.h"
 #include "audio_player.h"
 
+static const char *MUSIC_UI_TAG = "music_ui";
+
 /*********************
  *      DEFINES
  *********************/
@@ -66,6 +68,8 @@ static void timer_cb(lv_timer_t * t);
 static void track_load(uint32_t id);
 static void stop_start_anim_timer_cb(lv_timer_t * t);
 static void spectrum_end_cb(lv_anim_t * a);
+static void spectrum_restart_anim(void);
+static void music_audio_idle_cb(audio_player_cb_ctx_t *ctx);
 static void album_fade_anim_cb(void * var, int32_t v);
 static int32_t get_cos(int32_t deg, int32_t a);
 static int32_t get_sin(int32_t deg, int32_t a);
@@ -311,30 +315,30 @@ lv_obj_t * _lv_demo_music_main_create(lv_obj_t * parent, file_iterator_instance_
 
     lv_obj_update_layout(main_cont);
 
+    bsp_extra_player_register_callback(music_audio_idle_cb, NULL);
+
     return main_cont;
 }
 
 void _lv_demo_music_main_close(void)
 {
+    bsp_extra_player_register_callback(NULL, NULL);
     if(stop_start_anim_timer) lv_timer_del(stop_start_anim_timer);
     lv_timer_del(sec_counter_timer);
 }
 
 void _lv_demo_music_album_next(bool next)
 {
+    if (music_track_cnt == 0) {
+        return;
+    }
+
     uint32_t id = track_id;
 
     if (next) {
-        id++;
-        if (id >= ACTIVE_TRACK_CNT) {
-            id = 0;
-    }
+        id = (id + 1) % music_track_cnt;
     } else {
-        if (id == 0) {
-            id = ACTIVE_TRACK_CNT - 1;
-        } else {
-            id--;
-        }
+        id = (id == 0) ? (music_track_cnt - 1) : (id - 1);
     }
 
     if (playing) {
@@ -350,12 +354,19 @@ void _lv_demo_music_play(uint32_t id)
     LV_LOG_USER("play:%d, current:%d", id, current);
     if (current != id) {
         file_iterator_set_index(file_iterator, id);
-        //play_index(id);
         LV_LOG_USER("audio_play actual:%d", id);
     }
 
-    track_load(id);
+    pause_exit = false;
+    if (!bsp_extra_player_is_playing_by_index(file_iterator, id)) {
+        if (bsp_extra_player_play_index(file_iterator, id) != ESP_OK) {
+            ESP_LOGW(MUSIC_UI_TAG, "play_index(%u) failed", (unsigned)id);
+            return;
+        }
+    }
 
+    track_load(id);
+    pause = false;
     _lv_demo_music_resume();
 }
 
@@ -375,17 +386,29 @@ void _lv_demo_music_resume(void)
     lv_anim_start(&a);
 
     lv_timer_resume(sec_counter_timer);
-    lv_slider_set_range(slider_obj, 0, _lv_demo_music_get_track_length(track_id));
+    {
+        uint32_t track_len = _lv_demo_music_get_track_length(track_id);
+        lv_slider_set_range(slider_obj, 0, track_len > 0 ? track_len : 3600);
+    }
 
     lv_obj_add_state(play_obj, LV_STATE_CHECKED);
 
     if (!pause_exit && pause && bsp_extra_player_is_playing_by_index(file_iterator, track_id)) {
         LV_LOG_USER("Resume music");
-        audio_player_resume();
+        if (audio_player_resume() != ESP_OK) {
+            ESP_LOGW(MUSIC_UI_TAG, "audio_player_resume failed");
+        }
     } else {
         pause_exit = false;
         LV_LOG_USER("Music is not playing. Start playing.");
-        bsp_extra_player_play_index(file_iterator, track_id);
+        if (bsp_extra_player_play_index(file_iterator, track_id) != ESP_OK) {
+            ESP_LOGW(MUSIC_UI_TAG, "play_index(%u) failed", (unsigned)track_id);
+            playing = false;
+            pause = false;
+            lv_obj_clear_state(play_obj, LV_STATE_CHECKED);
+            lv_timer_pause(sec_counter_timer);
+            return;
+        }
     }
 
     playing = true;
@@ -715,7 +738,9 @@ static void track_load(uint32_t id)
 
     if(id == track_id) return;
     bool next = false;
-    if((track_id + 1) % ACTIVE_TRACK_CNT == id) next = true;
+    if (music_track_cnt > 0 && ((track_id + 1) % music_track_cnt) == id) {
+        next = true;
+    }
 
     _lv_demo_music_list_btn_check(track_id, false);
 
@@ -1041,9 +1066,40 @@ static void timer_cb(lv_timer_t * t)
     lv_slider_set_value(slider_obj, time_act, LV_ANIM_ON);
 }
 
+static void spectrum_restart_anim(void)
+{
+    spectrum_i = 0;
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_values(&a, 0, spectrum_len > 0 ? (int32_t)(spectrum_len - 1) : 0);
+    lv_anim_set_exec_cb(&a, spectrum_anim_cb);
+    lv_anim_set_var(&a, spectrum_obj);
+    lv_anim_set_time(&a, spectrum_len > 0 ? ((spectrum_len * 1000) / 30) : 1000);
+    lv_anim_set_playback_time(&a, 0);
+    lv_anim_set_ready_cb(&a, spectrum_end_cb);
+    lv_anim_start(&a);
+}
+
 static void spectrum_end_cb(lv_anim_t * a)
 {
     LV_UNUSED(a);
+    if (music_track_cnt > 1 && playing) {
+        _lv_demo_music_album_next(true);
+        return;
+    }
+    if (playing) {
+        spectrum_restart_anim();
+    }
+}
+
+static void music_audio_idle_cb(audio_player_cb_ctx_t *ctx)
+{
+    if (ctx == NULL || ctx->audio_event != AUDIO_PLAYER_CALLBACK_EVENT_IDLE) {
+        return;
+    }
+    if (!playing || music_track_cnt <= 1) {
+        return;
+    }
     _lv_demo_music_album_next(true);
 }
 

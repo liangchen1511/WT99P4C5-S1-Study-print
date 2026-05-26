@@ -42,6 +42,9 @@ extern "C" {
 void lv_demo_music(lv_obj_t *parent, file_iterator_instance_t *file_iterator);
 void lv_demo_music_close(void);
 
+/** SD 扫描到的真实曲目数（lv_demo_music 内赋值） */
+extern uint32_t music_track_cnt;
+
 const char * _lv_demo_music_get_title(uint32_t track_id);
 const char * _lv_demo_music_get_artist(uint32_t track_id);
 const char * _lv_demo_music_get_genre(uint32_t track_id);

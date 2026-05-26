@@ -22,5 +22,8 @@ public:
     bool pause(void) override;
 
 private:
+    bool scanAudioFiles(void);
+    void showNoMusicUi(lv_obj_t *parent);
+
     file_iterator_instance_t *_file_iterator;
 };

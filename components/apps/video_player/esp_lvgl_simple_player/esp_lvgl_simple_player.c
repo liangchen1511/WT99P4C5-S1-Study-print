@@ -48,12 +48,17 @@ typedef struct
     bool            hide_status;
     bool            auto_width;
     bool            auto_height;
+    bool            fit_letterbox;
+    uint32_t        viewport_width;
+    uint32_t        viewport_height;
 
     /* Buffers */
     uint8_t     *in_buff;
     uint32_t    in_buff_size;
     uint8_t     *out_buff;
     uint32_t    out_buff_size;
+    uint8_t     *display_buff;
+    uint32_t    display_buff_size;
     uint8_t     *cache_buff;
     uint32_t    cache_buff_size;
     bool        cache_buff_in_psram;
@@ -78,6 +83,69 @@ static const jpeg_decode_cfg_t jpeg_decode_cfg = {
     .output_format = JPEG_DECODE_OUT_FORMAT_RGB565,
     .rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_BGR,
 };
+
+static uint32_t s_letterbox_last_src_w;
+static uint32_t s_letterbox_last_src_h;
+static uint32_t s_letterbox_last_vp_w;
+static uint32_t s_letterbox_last_vp_h;
+
+static bool letterbox_geometry_changed(uint32_t src_w, uint32_t src_h, uint32_t vp_w, uint32_t vp_h)
+{
+    bool changed = (src_w != s_letterbox_last_src_w || src_h != s_letterbox_last_src_h ||
+                      vp_w != s_letterbox_last_vp_w || vp_h != s_letterbox_last_vp_h);
+    s_letterbox_last_src_w = src_w;
+    s_letterbox_last_src_h = src_h;
+    s_letterbox_last_vp_w = vp_w;
+    s_letterbox_last_vp_h = vp_h;
+    return changed;
+}
+
+static void rgb565_letterbox_fit(const uint16_t *src, uint32_t src_w, uint32_t src_h,
+                                 uint16_t *dst, uint32_t vp_w, uint32_t vp_h, bool clear_background)
+{
+    const uint16_t black = 0x0000;
+
+    if (clear_background) {
+        for (uint32_t y = 0; y < vp_h; y++) {
+            for (uint32_t x = 0; x < vp_w; x++) {
+                dst[y * vp_w + x] = black;
+            }
+        }
+    }
+
+    if (src == NULL || src_w == 0 || src_h == 0) {
+        return;
+    }
+
+    uint64_t scale_w = ((uint64_t)vp_w << 16) / src_w;
+    uint64_t scale_h = ((uint64_t)vp_h << 16) / src_h;
+    uint64_t scale = (scale_w < scale_h) ? scale_w : scale_h;
+    uint32_t dest_w = (uint32_t)((src_w * scale) >> 16);
+    uint32_t dest_h = (uint32_t)((src_h * scale) >> 16);
+    if (dest_w == 0) {
+        dest_w = 1;
+    }
+    if (dest_h == 0) {
+        dest_h = 1;
+    }
+
+    uint32_t off_x = (vp_w - dest_w) / 2;
+    uint32_t off_y = (vp_h - dest_h) / 2;
+
+    for (uint32_t dy = 0; dy < dest_h; dy++) {
+        uint32_t sy = (dy * src_h) / dest_h;
+        if (sy >= src_h) {
+            sy = src_h - 1;
+        }
+        for (uint32_t dx = 0; dx < dest_w; dx++) {
+            uint32_t sx = (dx * src_w) / dest_w;
+            if (sx >= src_w) {
+                sx = src_w - 1;
+            }
+            dst[(off_y + dy) * vp_w + (off_x + dx)] = src[sy * src_w + sx];
+        }
+    }
+}
 
 
 
@@ -419,15 +487,26 @@ static void show_video_task(void *arg)
     }
 
     bsp_display_lock(0);
-	/* Set buffer to LVGL canvas */
-    lv_canvas_set_buffer(player_ctx.canvas, player_ctx.out_buff, width, height, LV_IMG_CF_TRUE_COLOR);
-    lv_obj_invalidate(player_ctx.canvas);
-
-    if (player_ctx.auto_width || player_ctx.auto_height) {
-        uint32_t h = (player_ctx.auto_height ? (height+120) : lv_obj_get_height(player_ctx.main));
-        uint32_t w = (player_ctx.auto_width ? width : lv_obj_get_width(player_ctx.main));
-        lv_obj_set_size(player_ctx.main, w, h);
+    if (player_ctx.fit_letterbox && player_ctx.display_buff != NULL) {
+        bool clear_bg = letterbox_geometry_changed(width, height, player_ctx.viewport_width,
+                                                   player_ctx.viewport_height);
+        rgb565_letterbox_fit((const uint16_t *)player_ctx.out_buff, width, height,
+                             (uint16_t *)player_ctx.display_buff,
+                             player_ctx.viewport_width, player_ctx.viewport_height, clear_bg);
+        lv_canvas_set_buffer(player_ctx.canvas, player_ctx.display_buff,
+                             player_ctx.viewport_width, player_ctx.viewport_height,
+                             LV_IMG_CF_TRUE_COLOR);
+        lv_obj_set_size(player_ctx.canvas, player_ctx.viewport_width, player_ctx.viewport_height);
+        lv_obj_set_size(player_ctx.main, player_ctx.screen_width, player_ctx.screen_height);
+    } else {
+        lv_canvas_set_buffer(player_ctx.canvas, player_ctx.out_buff, width, height, LV_IMG_CF_TRUE_COLOR);
+        if (player_ctx.auto_width || player_ctx.auto_height) {
+            uint32_t h = (player_ctx.auto_height ? (height + 120) : lv_obj_get_height(player_ctx.main));
+            uint32_t w = (player_ctx.auto_width ? width : lv_obj_get_width(player_ctx.main));
+            lv_obj_set_size(player_ctx.main, w, h);
+        }
     }
+    lv_obj_invalidate(player_ctx.canvas);
 
     lv_obj_clear_state(player_ctx.slider, LV_STATE_DISABLED);
     /* Enable/disable buttons */
@@ -488,6 +567,12 @@ static void show_video_task(void *arg)
             all_size += processed;
         }
 
+        if (player_ctx.fit_letterbox && player_ctx.display_buff != NULL) {
+            rgb565_letterbox_fit((const uint16_t *)player_ctx.out_buff, player_ctx.video_width,
+                                 player_ctx.video_height, (uint16_t *)player_ctx.display_buff,
+                                 player_ctx.viewport_width, player_ctx.viewport_height, false);
+        }
+
         if (bsp_display_lock(10)) {
             /* Refresh video canvas object */
             lv_obj_invalidate(player_ctx.canvas);
@@ -500,10 +585,12 @@ static void show_video_task(void *arg)
 err:
     bsp_display_lock(0);
     /* Show black on screen */
-    if (player_ctx.out_buff != NULL && player_ctx.out_buff_size > 0) {
+    if (player_ctx.fit_letterbox && player_ctx.display_buff != NULL && player_ctx.display_buff_size > 0) {
+        memset(player_ctx.display_buff, 0, player_ctx.display_buff_size);
+    } else if (player_ctx.out_buff != NULL && player_ctx.out_buff_size > 0) {
         memset(player_ctx.out_buff, 0, player_ctx.out_buff_size);
     }
-    if (player_ctx.auto_height) {
+    if (player_ctx.auto_height && !player_ctx.fit_letterbox) {
         lv_obj_set_height(player_ctx.main, 320);
     }
     lv_obj_invalidate(player_ctx.canvas);
@@ -565,6 +652,23 @@ lv_obj_t * esp_lvgl_simple_player_create(esp_lvgl_simple_player_cfg_t * params)
     player_ctx.hide_status = params->flags.hide_status;
     player_ctx.auto_width = params->flags.auto_width;
     player_ctx.auto_height = params->flags.auto_height;
+    player_ctx.fit_letterbox = params->flags.fit_letterbox;
+    player_ctx.viewport_width = (params->viewport_width > 0) ? params->viewport_width : params->screen_width;
+    player_ctx.viewport_height = (params->viewport_height > 0) ? params->viewport_height : params->screen_height;
+
+    if (player_ctx.fit_letterbox) {
+        player_ctx.display_buff_size = player_ctx.viewport_width * player_ctx.viewport_height * (uint32_t)sizeof(lv_color_t);
+        player_ctx.display_buff = (uint8_t *)heap_caps_malloc(player_ctx.display_buff_size,
+                                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (player_ctx.display_buff == NULL) {
+            ESP_LOGE(TAG, "Malloc display_buff failed");
+            heap_caps_free(player_ctx.cache_buff);
+            player_ctx.cache_buff = NULL;
+            return NULL;
+        }
+        memset(player_ctx.display_buff, 0, player_ctx.display_buff_size);
+    }
+
     player_ctx.is_init = true;
 
     /* Create LVGL objects */
@@ -739,6 +843,11 @@ esp_err_t esp_lvgl_simple_player_del(void)
         return ESP_OK;
     }
 
+    s_letterbox_last_src_w = 0;
+    s_letterbox_last_src_h = 0;
+    s_letterbox_last_vp_w = 0;
+    s_letterbox_last_vp_h = 0;
+
     if (player_task_handle != 0) {
         esp_lvgl_simple_player_stop();
         if (esp_lvgl_simple_player_wait_task_stop(-1) != ESP_OK) {
@@ -746,7 +855,7 @@ esp_err_t esp_lvgl_simple_player_del(void)
         }
     }
 
-    if (player_ctx.out_buff != NULL) {
+    if (player_ctx.out_buff != NULL || player_ctx.display_buff != NULL) {
         bsp_display_lock(0);
         static lv_color_t s_canvas_detach_buf[32 * 32];
         memset(s_canvas_detach_buf, 0, sizeof(s_canvas_detach_buf));
@@ -754,11 +863,18 @@ esp_err_t esp_lvgl_simple_player_del(void)
             lv_canvas_set_buffer(player_ctx.canvas, s_canvas_detach_buf, 32, 32, LV_IMG_CF_TRUE_COLOR);
         }
         bsp_display_unlock();
+    }
+    if (player_ctx.out_buff != NULL) {
         heap_caps_free(player_ctx.out_buff);
         player_ctx.out_buff = NULL;
         player_ctx.out_buff_size = 0;
         player_ctx.video_width = 0;
         player_ctx.video_height = 0;
+    }
+    if (player_ctx.display_buff != NULL) {
+        heap_caps_free(player_ctx.display_buff);
+        player_ctx.display_buff = NULL;
+        player_ctx.display_buff_size = 0;
     }
 
     if (player_ctx.cache_buff) {

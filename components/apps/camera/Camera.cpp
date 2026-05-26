@@ -28,6 +28,7 @@
 
 #include "app_video.h"
 #include "Camera.hpp"
+#include "parent_guard.hpp"
 #include "ui/ui.h"
 
 #define ALIGN_UP_BY(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
@@ -373,6 +374,9 @@ Camera::~Camera()
 
 bool Camera::run(void)
 {
+    if (!parent_guard_app_run("camera")) {
+        return false;
+    }
     s_cam_instance = this;
     setPreviewCanvasOverride(nullptr);
     if (_jpeg_enc == nullptr && !init_jpeg_encoder()) {

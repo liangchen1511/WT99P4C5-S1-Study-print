@@ -33,6 +33,8 @@ typedef struct {
     bool        cache_buff_in_psram;    /* Use PSRAM for split buffer */
     uint32_t    screen_width;   /* Width of the video player object */
     uint32_t    screen_height;  /* Height of the video player object */
+    uint32_t    viewport_width;  /* Letterbox target width (0 = screen_width) */
+    uint32_t    viewport_height; /* Letterbox target height (0 = screen_height) */
     struct {
         unsigned int hide_controls: 1;  /* Hide control buttons */
         unsigned int hide_slider: 1;  /* Hide indication slider */
@@ -40,6 +42,7 @@ typedef struct {
 
         unsigned int auto_width: 1;  /* Set automatic width by video size */
         unsigned int auto_height: 1;  /* Set automatic height by video size */
+        unsigned int fit_letterbox: 1; /* Scale frames to viewport with black bars */
     } flags;
 } esp_lvgl_simple_player_cfg_t;
 
