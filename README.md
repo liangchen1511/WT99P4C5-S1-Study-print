@@ -91,7 +91,7 @@ Fonts: `components/lv_font_ui_zh/`. Print GBK map: `tools/gen_utf8_gbk_table.py`
 | Entry | **SoTi answer screen** — Print question / Print with answer (album print button removed) |
 | Stack | `escpos_text_print.c`: Font B, GBK, `CONFIG_UART_ESC_POS_PRINT_COLS=42` |
 | Priority | **UART TTL > USB host** |
-| TTL wiring | J6: **GPIO4→RX**, **GPIO5←TX**, GND; **GPIO1→CTS** (or strap CTS to 3.3 V) |
+| TTL wiring | J6: **GPIO4→RX**, **GPIO5←TX**, GND; **printer CTS→GPIO6** (HW flow control) |
 | Baud | Default **115200 8N1** (try 9600 or **Swap TX/RX** if silent) |
 | menuconfig | `Component config → USB / BLE ESC/POS printer` |
 
@@ -297,7 +297,8 @@ phone_wt99p4c5_s1_board/
 │   └── 2048/                       # 2048 game resources
 ├── mp4/                            # Video file directory
 ├── CMakeLists.txt                  # Top-level build configuration
-├── sdkconfig.defaults              # Default SDK configuration
+├── sdkconfig.defaults              # Default SDK config (committed; sync when changing sdkconfig)
+├── sdkconfig.defaults.release      # Release overlay (log/fonts/-Os, etc.)
 ├── partitions.csv                  # Partition table configuration
 ├── tools/
 │   ├── gen_lv_font_ui_zh.py        # Generate lv_font_ui_zh_22/30
@@ -367,6 +368,8 @@ Configure through `idf.py menuconfig`:
 - Audio sampling rate settings
 - Wi-Fi and Ethernet configuration
 - **USB / BLE ESC/POS printer** (TTL pins, baud, **42 text columns**)
+
+**sdkconfig sync (required):** Root `sdkconfig` is gitignored. Persist any `CONFIG_*` in `sdkconfig.defaults` (shared) and/or `sdkconfig.defaults.release` (release overlay). See [`docs/ENGINEERING_STANDARD.md`](docs/ENGINEERING_STANDARD.md) §4.
 
 ## Component Library Version Requirements
 

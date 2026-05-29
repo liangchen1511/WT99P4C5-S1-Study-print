@@ -19,6 +19,7 @@
 #include "soti_print_sections.hpp"
 #include "power_manager.h"
 #include "parent_album_sync.h"
+#include "parent_print_sync.h"
 #include "parent_chat/parent_chat_api.hpp"
 #include "soti_mode.h"
 #include "soti_config.h"
@@ -273,6 +274,7 @@ static void soti_upload_task(void *arg)
 
     ESP_LOGI(TAG, "upload task start (single session) mode=%s jpeg=%u bytes", mode_q, (unsigned)len);
     parent_album_sync_pause(true);
+    parent_print_sync_pause(true);
     parent_chat_bg_pause(true);
 
     char *abuf = (char *)calloc(1, 16384);
@@ -301,6 +303,7 @@ static void soti_upload_task(void *arg)
         s_upload_worker_busy = false;
         portEXIT_CRITICAL(&s_upload_mux);
         parent_album_sync_pause(false);
+        parent_print_sync_pause(false);
         parent_chat_bg_pause(false);
         power_manager_unblock_sleep("soti");
         vTaskDelete(nullptr);
@@ -363,6 +366,7 @@ static void soti_upload_task(void *arg)
     s_upload_worker_busy = false;
     portEXIT_CRITICAL(&s_upload_mux);
     parent_album_sync_pause(false);
+    parent_print_sync_pause(false);
     parent_chat_bg_pause(false);
     power_manager_unblock_sleep("soti");
     vTaskDelete(nullptr);
@@ -380,6 +384,7 @@ static void soti_daily_task(void *arg)
 
     ESP_LOGI(TAG, "daily task started");
     parent_album_sync_pause(true);
+    parent_print_sync_pause(true);
     parent_chat_bg_pause(true);
 
     char *abuf = (char *)calloc(1, 4096);
@@ -399,6 +404,7 @@ static void soti_daily_task(void *arg)
             }
         }
         parent_album_sync_pause(false);
+        parent_print_sync_pause(false);
         parent_chat_bg_pause(false);
         power_manager_unblock_sleep("soti");
         vTaskDelete(nullptr);
@@ -450,6 +456,7 @@ static void soti_daily_task(void *arg)
     }
 
     parent_album_sync_pause(false);
+    parent_print_sync_pause(false);
     parent_chat_bg_pause(false);
     power_manager_unblock_sleep("soti");
     vTaskDelete(nullptr);

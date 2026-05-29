@@ -6,6 +6,7 @@
 
 - 验证 Flash / RAM / 相机 / 显示等桌面端优化
 - 日常构建默认使用 `sdkconfig.defaults` + `sdkconfig.defaults.release`
+- **改 `sdkconfig` 须同步维护上述 defaults 文件**（`sdkconfig` 不提交 Git）；见 [`ENGINEERING_STANDARD.md`](ENGINEERING_STANDARD.md) §4
 - 分区表：[`partitions.csv`](../partitions.csv)（9M 单 factory + 4M SPIFFS）
 
 ## 桌面 App 列表

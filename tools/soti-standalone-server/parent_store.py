@@ -19,6 +19,13 @@ ALBUM_INBOX_DIR = os.path.join(DATA_DIR, "album_inbox")
 MAX_ALBUM_FILE_BYTES = int(os.environ.get("PARENT_ALBUM_MAX_FILE", str(4 * 1024 * 1024)))
 MAX_ALBUM_PENDING = int(os.environ.get("PARENT_ALBUM_MAX_PENDING", "10"))
 ALBUM_TTL_SEC = float(os.environ.get("PARENT_ALBUM_TTL_SEC", "86400"))
+
+PRINT_INBOX_DIR = os.path.join(DATA_DIR, "print_inbox")
+MAX_PRINT_FILE_BYTES = int(os.environ.get("PARENT_PRINT_MAX_FILE", str(2 * 1024 * 1024)))
+MAX_PRINT_PENDING = int(os.environ.get("PARENT_PRINT_MAX_PENDING", "5"))
+PRINT_TTL_SEC = float(os.environ.get("PARENT_PRINT_TTL_SEC", "86400"))
+MAX_PRINT_TEXT_CHARS = int(os.environ.get("PARENT_PRINT_MAX_TEXT_CHARS", "2000"))
+MAX_PRINT_TEXT_BYTES = int(os.environ.get("PARENT_PRINT_MAX_TEXT_BYTES", "8192"))
 MAX_HISTORY_ROWS = int(os.environ.get("PARENT_MAX_HISTORY", "500"))
 MAX_CHAT_ROWS = int(os.environ.get("PARENT_MAX_CHAT", "200"))
 CHAT_MAX_BODY_LEN = 500
@@ -160,7 +167,28 @@ def _connect() -> sqlite3.Connection:
     _conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_album_device_pending ON album_inbox(device_id, acked_at)"
     )
+    _conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS print_inbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT NOT NULL,
+            job_type TEXT NOT NULL,
+            safe_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            meta_json TEXT,
+            created_at REAL NOT NULL,
+            acked_at REAL
+        )
+        """
+    )
+    _conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_print_device_pending ON print_inbox(device_id, acked_at)"
+    )
     os.makedirs(ALBUM_INBOX_DIR, exist_ok=True)
+    os.makedirs(PRINT_INBOX_DIR, exist_ok=True)
     _conn.execute("PRAGMA journal_mode=WAL")
     _conn.commit()
     return _conn
@@ -704,6 +732,265 @@ def album_ack(album_id: int, device_id: str) -> bool:
         c.execute(
             "UPDATE album_inbox SET acked_at=? WHERE id=?",
             (time.time(), album_id),
+        )
+        c.commit()
+    return True
+
+
+def _sanitize_print_name(raw: str, ext: str) -> str:
+    import re
+
+    base = (raw or "print").split("/")[-1].split("\\")[-1].strip()
+    stem = re.sub(r"\.[^.]+$", "", base)
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
+    if not stem:
+        stem = "print"
+    if len(stem) > 48:
+        stem = stem[:48]
+    ext = ext if ext.startswith(".") else f".{ext}"
+    return f"{stem}{ext}"
+
+
+def print_prune() -> None:
+    now = time.time()
+    with _lock:
+        c = _connect()
+        rows = c.execute(
+            "SELECT id, file_path FROM print_inbox WHERE acked_at IS NOT NULL OR created_at < ?",
+            (now - PRINT_TTL_SEC,),
+        ).fetchall()
+        for row in rows:
+            try:
+                os.remove(row["file_path"])
+            except OSError:
+                pass
+            c.execute("DELETE FROM print_inbox WHERE id=?", (row["id"],))
+        c.commit()
+
+
+def print_pending_count(device_id: str) -> int:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    with _lock:
+        c = _connect()
+        n = c.execute(
+            "SELECT COUNT(*) FROM print_inbox WHERE device_id=? AND acked_at IS NULL",
+            (device_id,),
+        ).fetchone()[0]
+    return int(n)
+
+
+def print_list_pending(device_id: str) -> list[dict[str, Any]]:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    print_prune()
+    with _lock:
+        c = _connect()
+        rows = c.execute(
+            """
+            SELECT id, job_type, safe_name, size, width, height, created_at, file_path, meta_json
+            FROM print_inbox
+            WHERE device_id=? AND acked_at IS NULL
+            ORDER BY id ASC
+            """,
+            (device_id,),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            path = (r["file_path"] or "").strip()
+            if not path or not os.path.isfile(path):
+                c.execute("DELETE FROM print_inbox WHERE id=?", (r["id"],))
+                continue
+            item: dict[str, Any] = {
+                "id": int(r["id"]),
+                "type": str(r["job_type"]),
+                "name": str(r["safe_name"]),
+                "size": int(r["size"]),
+                "created_at": float(r["created_at"]),
+            }
+            if r["width"] is not None:
+                item["width"] = int(r["width"])
+            if r["height"] is not None:
+                item["height"] = int(r["height"])
+            if str(r["job_type"]) == "text":
+                try:
+                    meta = json.loads(r["meta_json"] or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+                t = str(meta.get("title") or "").strip()
+                item["title"] = t
+                item["name"] = t if t else "文字"
+            out.append(item)
+        c.commit()
+        return out
+
+
+def print_insert_image(
+    device_id: str,
+    safe_name: str,
+    jpeg: bytes,
+    width: int,
+    height: int,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    if not jpeg or len(jpeg) < 256:
+        raise ValueError("file too small")
+    if len(jpeg) > MAX_PRINT_FILE_BYTES:
+        raise ValueError("file too large")
+    if jpeg[0] != 0xFF or jpeg[1] != 0xD8:
+        raise ValueError("not jpeg")
+    safe_name = _sanitize_print_name(safe_name, ".jpg")
+    print_prune()
+    meta_json = json.dumps(meta or {}, ensure_ascii=False)
+    with _lock:
+        c = _connect()
+        pending = c.execute(
+            "SELECT COUNT(*) FROM print_inbox WHERE device_id=? AND acked_at IS NULL",
+            (device_id,),
+        ).fetchone()[0]
+        if pending >= MAX_PRINT_PENDING:
+            raise ValueError("too many pending print jobs")
+        dev_dir = os.path.join(PRINT_INBOX_DIR, device_id)
+        os.makedirs(dev_dir, exist_ok=True)
+        now = time.time()
+        cur = c.execute(
+            """
+            INSERT INTO print_inbox
+            (device_id, job_type, safe_name, file_path, size, width, height, meta_json, created_at)
+            VALUES (?, 'image', ?, '', ?, ?, ?, ?, ?)
+            """,
+            (device_id, safe_name, len(jpeg), width, height, meta_json, now),
+        )
+        rid = int(cur.lastrowid)
+        fpath = os.path.join(dev_dir, f"{rid}_{safe_name}")
+        with open(fpath, "wb") as f:
+            f.write(jpeg)
+        c.execute("UPDATE print_inbox SET file_path=? WHERE id=?", (fpath, rid))
+        c.commit()
+    return {
+        "id": rid,
+        "type": "image",
+        "name": safe_name,
+        "size": len(jpeg),
+        "width": width,
+        "height": height,
+    }
+
+
+def print_insert_text(device_id: str, title: str, text_utf8: bytes) -> dict[str, Any]:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    if not text_utf8:
+        raise ValueError("empty text")
+    if len(text_utf8) > MAX_PRINT_TEXT_BYTES:
+        raise ValueError("text too large")
+    try:
+        s = text_utf8.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise ValueError("invalid utf-8") from e
+    if len(s) > MAX_PRINT_TEXT_CHARS:
+        raise ValueError("text too long")
+    title = (title or "").strip()
+    safe_name = _sanitize_print_name(title or "note", ".txt")
+    meta_json = json.dumps({"title": title}, ensure_ascii=False)
+    print_prune()
+    with _lock:
+        c = _connect()
+        pending = c.execute(
+            "SELECT COUNT(*) FROM print_inbox WHERE device_id=? AND acked_at IS NULL",
+            (device_id,),
+        ).fetchone()[0]
+        if pending >= MAX_PRINT_PENDING:
+            raise ValueError("too many pending print jobs")
+        dev_dir = os.path.join(PRINT_INBOX_DIR, device_id)
+        os.makedirs(dev_dir, exist_ok=True)
+        now = time.time()
+        cur = c.execute(
+            """
+            INSERT INTO print_inbox
+            (device_id, job_type, safe_name, file_path, size, width, height, meta_json, created_at)
+            VALUES (?, 'text', ?, '', ?, NULL, NULL, ?, ?)
+            """,
+            (device_id, safe_name, len(text_utf8), meta_json, now),
+        )
+        rid = int(cur.lastrowid)
+        fpath = os.path.join(dev_dir, f"{rid}_{safe_name}")
+        with open(fpath, "wb") as f:
+            f.write(text_utf8)
+        c.execute("UPDATE print_inbox SET file_path=? WHERE id=?", (fpath, rid))
+        c.commit()
+    return {"id": rid, "type": "text", "name": title or "文字", "title": title, "size": len(text_utf8)}
+
+
+def print_get_row(print_id: int, device_id: str) -> dict[str, Any] | None:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    with _lock:
+        c = _connect()
+        row = c.execute(
+            """
+            SELECT id, job_type, safe_name, file_path, size, width, height
+            FROM print_inbox WHERE id=? AND device_id=? AND acked_at IS NULL
+            """,
+            (print_id, device_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def print_read_text(print_id: int, device_id: str) -> str | None:
+    row = print_get_row(print_id, device_id)
+    if row is None or row["job_type"] != "text":
+        return None
+    fpath = row["file_path"] or ""
+    if not fpath or not os.path.isfile(fpath):
+        return None
+    try:
+        with open(fpath, "rb") as f:
+            raw = f.read(MAX_PRINT_TEXT_BYTES + 1)
+        if len(raw) > MAX_PRINT_TEXT_BYTES:
+            return None
+        return raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def print_read_chunk(print_id: int, device_id: str, offset: int, length: int) -> bytes | None:
+    row = print_get_row(print_id, device_id)
+    if row is None or row["job_type"] != "image":
+        return None
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    length = min(max(length, 1), 65536)
+    fpath = row["file_path"] or ""
+    size = int(row["size"])
+    if not fpath or not os.path.isfile(fpath):
+        return None
+    if offset < 0 or offset >= size:
+        return b""
+    to_read = min(length, size - offset)
+    try:
+        with open(fpath, "rb") as f:
+            f.seek(offset)
+            return f.read(to_read)
+    except OSError:
+        return None
+
+
+def print_ack(print_id: int, device_id: str) -> bool:
+    device_id = (device_id or DEFAULT_DEVICE_ID).strip().upper()
+    with _lock:
+        c = _connect()
+        row = c.execute(
+            "SELECT file_path FROM print_inbox WHERE id=? AND device_id=? AND acked_at IS NULL",
+            (print_id, device_id),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            os.remove(row["file_path"])
+        except OSError:
+            pass
+        c.execute(
+            "UPDATE print_inbox SET acked_at=? WHERE id=?",
+            (time.time(), print_id),
         )
         c.commit()
     return True

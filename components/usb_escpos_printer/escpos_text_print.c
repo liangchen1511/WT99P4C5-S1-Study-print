@@ -133,7 +133,7 @@ static bool is_ascii_word_char(uint32_t cp)
     if (cp >= '0' && cp <= '9') {
         return true;
     }
-    return cp == '-' || cp == '\'';
+    return cp == '-' || cp == '\'' || cp == '_';
 }
 
 static bool is_ascii_break_char(uint32_t cp)
@@ -336,6 +336,20 @@ esp_err_t escpos_printer_print_utf8(const char *utf8)
     }
     if (usb_escpos_printer_ready()) {
         return escpos_print_utf8_strip(utf8, usb_link_write, NULL);
+    }
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t escpos_printer_print_jpeg_file(const char *filepath)
+{
+    if (filepath == NULL || filepath[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (uart_escpos_printer_ready()) {
+        return uart_escpos_print_jpeg_file(filepath);
+    }
+    if (usb_escpos_printer_ready()) {
+        return usb_escpos_print_jpeg_file(filepath);
     }
     return ESP_ERR_NOT_FOUND;
 }

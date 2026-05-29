@@ -12,7 +12,7 @@ OUT = ROOT / "components" / "usb_escpos_printer" / "utf8_gbk_map.inc"
 # Extra chars for print labels / punctuation
 EXTRA = (
     "【】仅题目含答案步骤解析译文原文说明标题要点关键词批改结果每日一句易错提醒考点分步讲解打印失败无打印机"
-    "—–…·《》「」"
+    "—–…·《》「」＿"
 )
 
 

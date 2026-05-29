@@ -11,12 +11,19 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from album_preprocess import album_normalize_image
+from print_preprocess import print_normalize_image
 from parent_store import (
     DEFAULT_DEVICE_ID,
     album_ack,
     album_insert,
     album_list_pending,
     album_read_chunk,
+    print_ack,
+    print_insert_image,
+    print_insert_text,
+    print_list_pending,
+    print_read_chunk,
+    print_read_text,
     chat_insert,
     chat_list_recent,
     chat_mark_read,
@@ -339,6 +346,63 @@ def handle_get(handler: BaseHTTPRequestHandler) -> bool:
         handler.wfile.write(data)
         return True
 
+    if path == "/parent/api/print/poll":
+        if not _device_auth_ok(handler):
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        device_id = str(qs.get("device_id", [DEFAULT_DEVICE_ID])[0]).strip().upper()
+        if handler.headers.get("X-Device-Id"):
+            device_id = handler.headers.get("X-Device-Id", device_id).strip().upper()
+        touch_device(device_id, handler.client_address[0])
+        items = print_list_pending(device_id)
+        _json_response(handler, 200, {"ok": True, "items": items})
+        return True
+
+    if path.startswith("/parent/api/print/file/"):
+        if not _device_auth_ok(handler):
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        try:
+            print_id = int(path.split("/")[-1])
+        except ValueError:
+            _json_response(handler, 400, {"ok": False, "error": "bad id"})
+            return True
+        device_id = str(qs.get("device_id", [DEFAULT_DEVICE_ID])[0]).strip().upper()
+        if handler.headers.get("X-Device-Id"):
+            device_id = handler.headers.get("X-Device-Id", device_id).strip().upper()
+        off = int(qs.get("off", ["0"])[0])
+        length = int(qs.get("len", ["4096"])[0])
+        data = print_read_chunk(print_id, device_id, off, length)
+        if data is None:
+            handler.send_error(404)
+            return True
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/octet-stream")
+        handler.send_header("Content-Length", str(len(data)))
+        handler.send_header("Connection", "close")
+        handler.end_headers()
+        handler.wfile.write(data)
+        return True
+
+    if path.startswith("/parent/api/print/text/"):
+        if not _device_auth_ok(handler):
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        try:
+            print_id = int(path.split("/")[-1])
+        except ValueError:
+            _json_response(handler, 400, {"ok": False, "error": "bad id"})
+            return True
+        device_id = str(qs.get("device_id", [DEFAULT_DEVICE_ID])[0]).strip().upper()
+        if handler.headers.get("X-Device-Id"):
+            device_id = handler.headers.get("X-Device-Id", device_id).strip().upper()
+        body = print_read_text(print_id, device_id)
+        if body is None:
+            _json_response(handler, 404, {"ok": False, "error": "not found"})
+            return True
+        _json_response(handler, 200, {"ok": True, "body": body})
+        return True
+
     return False
 
 
@@ -490,6 +554,100 @@ def handle_post(handler: BaseHTTPRequestHandler) -> bool:
             _json_response(handler, 400, {"ok": False, "error": "bad id"})
             return True
         if not album_ack(album_id, device_id):
+            _json_response(handler, 404, {"ok": False, "error": "not found"})
+        else:
+            _json_response(handler, 200, {"ok": True})
+        return True
+
+    if path == "/parent/api/print/upload":
+        device_id = _session_ok(handler)
+        if not device_id:
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        ctype = handler.headers.get("Content-Type", "")
+        if "multipart/form-data" not in ctype:
+            _json_response(handler, 400, {"ok": False, "error": "need multipart"})
+            return True
+        try:
+            import cgi
+
+            env = {
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": ctype,
+                "CONTENT_LENGTH": handler.headers.get("Content-Length", "0"),
+            }
+            form = cgi.FieldStorage(fp=handler.rfile, headers=handler.headers, environ=env)
+            job_type = "image"
+            if "type" in form and form["type"].value:
+                job_type = str(form["type"].value).strip().lower()
+            if job_type == "text":
+                body_field = form.getvalue("body") if "body" in form else ""
+                if not body_field:
+                    _json_response(handler, 400, {"ok": False, "error": "empty text"})
+                    return True
+                title = ""
+                if "name" in form and form["name"].value:
+                    title = str(form["name"].value).strip()
+                text_bytes = body_field.encode("utf-8") if isinstance(body_field, str) else body_field
+                row = print_insert_text(device_id, title, text_bytes)
+                _json_response(handler, 200, {"ok": True, "item": row})
+                return True
+            if job_type != "image":
+                _json_response(handler, 400, {"ok": False, "error": "bad type"})
+                return True
+            if "file" not in form:
+                _json_response(handler, 400, {"ok": False, "error": "no file"})
+                return True
+            file_item = form["file"]
+            if not file_item.file:
+                _json_response(handler, 400, {"ok": False, "error": "empty file"})
+                return True
+            raw = file_item.file.read()
+            fname = file_item.filename or "print.jpg"
+            if "name" in form and form["name"].value:
+                fname = str(form["name"].value)
+            binarize = True
+            if "binarize" in form and form["binarize"].value is not None:
+                bv = str(form["binarize"].value).strip().lower()
+                binarize = bv not in ("0", "false", "no", "off")
+            meta = print_normalize_image(raw, binarize=binarize)
+            jpeg = meta["jpeg"]
+            row = print_insert_image(
+                device_id,
+                fname,
+                jpeg,
+                int(meta["width"]),
+                int(meta["height"]),
+                meta={"binarize": meta.get("binarize", binarize)},
+            )
+            row["width"] = meta["width"]
+            row["height"] = meta["height"]
+            row["original_size"] = meta["original_size"]
+            row["processed_size"] = meta["processed_size"]
+            row["source_width"] = meta["source_width"]
+            row["source_height"] = meta["source_height"]
+            _json_response(handler, 200, {"ok": True, "item": row})
+        except ValueError as e:
+            _json_response(handler, 400, {"ok": False, "error": str(e)})
+        return True
+
+    if path == "/parent/api/print/ack":
+        if not _device_auth_ok(handler):
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        body = _read_json_body(handler)
+        if body is None:
+            _json_response(handler, 400, {"ok": False, "error": "bad json"})
+            return True
+        device_id = str(
+            body.get("device_id") or handler.headers.get("X-Device-Id") or DEFAULT_DEVICE_ID
+        ).strip().upper()
+        try:
+            print_id = int(body.get("id", 0))
+        except (TypeError, ValueError):
+            _json_response(handler, 400, {"ok": False, "error": "bad id"})
+            return True
+        if not print_ack(print_id, device_id):
             _json_response(handler, 404, {"ok": False, "error": "not found"})
         else:
             _json_response(handler, 200, {"ok": True})

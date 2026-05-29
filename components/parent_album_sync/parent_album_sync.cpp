@@ -6,6 +6,7 @@
 
 #include "parent_album_sync.h"
 #include "parent_album_fs.h"
+#include "parent_net_gate.h"
 
 #include "soti_config.h"
 
@@ -103,6 +104,9 @@ static void apply_bearer(esp_http_client_handle_t client)
 
 static bool http_get_text(const char *path_query, std::string &out, int *status_out)
 {
+    if (!parent_net_http_allowed()) {
+        return false;
+    }
     char url[360];
     if (!build_api_url(url, sizeof(url), path_query)) {
         return false;
@@ -189,6 +193,9 @@ static bool http_post_json(const char *path, const char *json, std::string &out)
 static bool http_get_binary_chunk(const char *path_query, size_t offset, size_t len, uint8_t *buf, size_t *got)
 {
     *got = 0;
+    if (!parent_net_http_allowed()) {
+        return false;
+    }
     char url[400];
     if (!build_api_url(url, sizeof(url), path_query)) {
         return false;

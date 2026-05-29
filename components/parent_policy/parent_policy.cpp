@@ -6,6 +6,7 @@
 
 #include "parent_policy.hpp"
 #include "parent_config.h"
+#include "parent_net_gate.h"
 #include "soti_config.h"
 
 #include <cstring>
@@ -30,7 +31,7 @@ static bool s_demo_force_study;
 static bool s_have_policy;
 static char s_block_reason[96];
 static TaskHandle_t s_poll_task;
-static volatile bool s_poll_paused;
+static volatile bool s_poll_paused = true;
 
 static void set_block_reason(const char *msg)
 {
@@ -288,6 +289,9 @@ static bool schedule_allows(const char *app_id)
 
 static esp_err_t fetch_policy_http(void)
 {
+    if (!parent_net_http_allowed()) {
+        return ESP_ERR_INVALID_STATE;
+    }
     char url[280];
     if (!build_policy_url(url, sizeof(url))) {
         return ESP_FAIL;

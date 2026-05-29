@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS main.cpp
     INCLUDE_DIRS .
-    REQUIRES wt99p4c5_s1_board usb_escpos_printer nvs_flash apps parent_policy parent_album_sync boot_splash power_manager
+    REQUIRES wt99p4c5_s1_board usb_escpos_printer nvs_flash apps parent_policy parent_album_sync parent_print_sync boot_splash power_manager
 )
 
 idf_component_get_property(LVGL_LIB lvgl__lvgl COMPONENT_LIB)

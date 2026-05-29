@@ -9,6 +9,7 @@
 #include "freertos/semphr.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "nvs_flash.h"
 #include "bsp/esp-bsp.h"
 #include "esp_brookesia.hpp"
@@ -16,7 +17,9 @@
 #include "apps.h"
 #include "boot_splash.h"
 #include "parent_policy.hpp"
+#include "parent_net_gate.h"
 #include "parent_album_sync.h"
+#include "parent_print_sync.h"
 #include "camera/camera_power_bridge.h"
 #include "power_manager.h"
 #include "escpos_feature_flags.h"
@@ -32,6 +35,44 @@
     }
 
 static const char *TAG = "app_main";
+
+static const char *reset_reason_str(esp_reset_reason_t r)
+{
+    switch (r) {
+    case ESP_RST_POWERON:
+        return "poweron";
+    case ESP_RST_EXT:
+        return "ext";
+    case ESP_RST_SW:
+        return "sw";
+    case ESP_RST_PANIC:
+        return "panic";
+    case ESP_RST_INT_WDT:
+        return "int_wdt";
+    case ESP_RST_TASK_WDT:
+        return "task_wdt";
+    case ESP_RST_WDT:
+        return "wdt";
+    case ESP_RST_DEEPSLEEP:
+        return "deepsleep";
+    case ESP_RST_BROWNOUT:
+        return "brownout";
+    case ESP_RST_SDIO:
+        return "sdio";
+    case ESP_RST_USB:
+        return "usb";
+    case ESP_RST_JTAG:
+        return "jtag";
+    case ESP_RST_EFUSE:
+        return "efuse";
+    case ESP_RST_PWR_GLITCH:
+        return "pwr_glitch";
+    case ESP_RST_CPU_LOCKUP:
+        return "cpu_lockup";
+    default:
+        return "unknown";
+    }
+}
 
 static SemaphoreHandle_t s_deferred_init_done;
 
@@ -124,6 +165,8 @@ extern "C" void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+    ESP_LOGI(TAG, "reset reason: %s (%d)", reset_reason_str(esp_reset_reason()), (int)esp_reset_reason());
+    parent_reset_nvs_boot_log();
 
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = LVGL_PORT_INIT_CONFIG(),
@@ -179,9 +222,10 @@ extern "C" void app_main(void)
 
     assert(phone->begin() && "Failed to begin phone");
 
+    camera_power_bridge_init();
     parent_policy_init();
     parent_album_sync_bg_start();
-    camera_power_bridge_init();
+    parent_print_sync_bg_start();
 
     ESP_ERROR_CHECK(power_manager_init());
     power_manager_set_backlight_percent(100);

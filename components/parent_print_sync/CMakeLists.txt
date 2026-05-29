@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS
-        "parent_album_fs.c"
-        "parent_album_sync.cpp"
+        "parent_print_fs.c"
+        "parent_print_sync.cpp"
     INCLUDE_DIRS "include" "../apps/SoTi"
     REQUIRES
         esp_http_client
@@ -11,8 +11,10 @@ idf_component_register(
         json
         fatfs
         vfs
-        nvs_flash
         power_manager
+        spiffs
         wt99p4c5_s1_board
+        usb_escpos_printer
+        parent_album_sync
         parent_policy
 )

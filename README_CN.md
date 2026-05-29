@@ -91,7 +91,7 @@
 | 入口 | **SoTi 答案页**「仅题目 / 含答案」（相册已移除打印按钮） |
 | 链路 | `escpos_text_print.c`：Font B、GBK、`CONFIG_UART_ESC_POS_PRINT_COLS=42` |
 | 优先级 | **UART TTL > USB Host** |
-| TTL 接线 | J6：**GPIO4→RX**，**GPIO5←TX**，GND；**GPIO1→CTS**（或 CTS 接 3.3V） |
+| TTL 接线 | J6：**GPIO4→RX**，**GPIO5←TX**，GND；**打印机 CTS→GPIO6**（硬件流控） |
 | 波特率 | 默认 **115200 8N1**（EM5820H 无声可试 9600 或 menuconfig **Swap TX/RX**） |
 | menuconfig | `Component config → USB / BLE ESC/POS printer` |
 
@@ -298,7 +298,8 @@ phone_wt99p4c5_s1_board/
 │   └── 2048/                       # 2048游戏资源
 ├── mp4/                            # 视频文件目录
 ├── CMakeLists.txt                  # 顶层构建配置
-├── sdkconfig.defaults              # 默认SDK配置
+├── sdkconfig.defaults              # 默认 SDK 配置（进 Git；改 sdkconfig 须同步维护）
+├── sdkconfig.defaults.release      # Release 覆盖层（日志/字体/-Os 等）
 ├── partitions.csv                  # 分区表配置
 ├── tools/
 │   ├── gen_lv_font_ui_zh.py        # 生成 lv_font_ui_zh_22/30
@@ -368,6 +369,8 @@ idf.py monitor
 - 音频采样率设置
 - Wi-Fi和以太网配置
 - **USB / BLE ESC/POS printer**（TTL 引脚、波特率、**文本行宽 42 列**）
+
+**sdkconfig 同步（必须）：** 根目录 `sdkconfig` 不提交 Git。任何需保留的 `CONFIG_*` 须同步写入 `sdkconfig.defaults`（全构建共用）和/或 `sdkconfig.defaults.release`（Release 覆盖）；本地试验确认后可 `idf.py save-defconfig` 或删 `sdkconfig` 后 `idf.py build` 验证。详见 [`docs/ENGINEERING_STANDARD.md`](docs/ENGINEERING_STANDARD.md) §4。
 
 ## 组件库版本要求
 

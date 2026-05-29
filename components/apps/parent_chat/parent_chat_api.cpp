@@ -6,6 +6,7 @@
 
 #include "parent_chat_api.hpp"
 #include "parent_chat_launcher.hpp"
+#include "parent_net_gate.h"
 
 #include "soti_config.h"
 
@@ -122,6 +123,9 @@ static bool parent_chat_http_get_buf(const char *path_with_query, char *body, si
     if (body == nullptr || cap < 64) {
         return false;
     }
+    if (!parent_net_http_allowed()) {
+        return false;
+    }
     body[0] = '\0';
     char url[320];
     if (!parent_chat_build_api_url(url, sizeof(url), path_with_query)) {
@@ -154,6 +158,9 @@ static bool parent_chat_http_get_buf(const char *path_with_query, char *body, si
 
 bool parent_chat_http_get(const char *path_with_query, std::string &out_body, int *out_status)
 {
+    if (!parent_net_http_allowed()) {
+        return false;
+    }
     char url[320];
     if (!parent_chat_build_api_url(url, sizeof(url), path_with_query)) {
         return false;
@@ -185,6 +192,9 @@ bool parent_chat_http_get(const char *path_with_query, std::string &out_body, in
 
 bool parent_chat_http_post_json(const char *path, const char *json_body, std::string &out_body, int *out_status)
 {
+    if (!parent_net_http_allowed()) {
+        return false;
+    }
     char url[320];
     if (!parent_chat_build_api_url(url, sizeof(url), path)) {
         return false;

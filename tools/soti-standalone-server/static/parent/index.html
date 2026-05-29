@@ -62,6 +62,9 @@
           <button type="button" class="nav-item" data-view="album">
             <span class="nav-icon">🖼</span> 相册传图
           </button>
+          <button type="button" class="nav-item" data-view="print">
+            <span class="nav-icon">🖨</span> 远程打印
+          </button>
         </nav>
         <div class="sidebar-foot muted">
           <span id="sidebar-device">—</span>
@@ -158,6 +161,41 @@
           </section>
         </section>
 
+        <section id="panel-print" class="panel" hidden>
+          <section class="card">
+            <h3>远程打印 · 图片</h3>
+            <p class="muted">缩放到热敏纸宽度（约 384px），设备「打印」App 内确认后出纸；不会写入 SD 相册。</p>
+            <label class="album-upload-field">
+              <span class="form-label">选择照片</span>
+              <input type="file" id="print-image-file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+            </label>
+            <label>
+              <span class="form-label">文件名（可选）</span>
+              <input type="text" id="print-image-name" placeholder="留空则用原文件名" />
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="print-binarize" checked />
+              <span>热敏对比增强（保留蓝色线条，推荐）</span>
+            </label>
+            <button type="button" class="btn btn--primary btn--block" id="btn-print-image-upload">加入打印队列</button>
+          </section>
+          <section class="card" style="margin-top:16px">
+            <h3>远程打印 · 文字</h3>
+            <p class="muted">最多 2000 字；设备确认后通过热敏机打印。</p>
+            <label>
+              <span class="form-label">标题（可选）</span>
+              <input type="text" id="print-text-name" placeholder="note" />
+            </label>
+            <label>
+              <span class="form-label">正文</span>
+              <textarea id="print-text-body" rows="6" maxlength="2000" placeholder="输入要打印的文字…"></textarea>
+            </label>
+            <button type="button" class="btn btn--primary btn--block" id="btn-print-text-upload">加入打印队列</button>
+            <p id="print-upload-msg" class="hint" hidden></p>
+            <ul id="print-upload-list" class="history-list"></ul>
+          </section>
+        </section>
+
         <section id="panel-policy" class="panel" hidden>
           <section class="card">
             <h3>应用开关</h3>
@@ -230,6 +268,6 @@
       </div>
     </aside>
   </div>
-  <script src="/parent/app.js"></script>
+  <script src="/parent/app.js?v=20260528-3"></script>
 </body>
 </html>

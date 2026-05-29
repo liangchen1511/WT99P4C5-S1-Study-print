@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "parent_policy.cpp" "parent_guard.cpp"
+    SRCS "parent_policy.cpp" "parent_guard.cpp" "parent_net_gate.c"
     INCLUDE_DIRS "." "../apps/SoTi"
-    REQUIRES esp_http_client esp-tls nvs_flash json esp_wifi esp_netif lvgl__lvgl lv_font_ui_zh
+    REQUIRES esp_http_client esp-tls nvs_flash json esp_wifi esp_netif lvgl__lvgl lv_font_ui_zh power_manager
 )

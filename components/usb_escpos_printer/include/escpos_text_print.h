@@ -23,6 +23,9 @@ esp_err_t escpos_print_utf8_strip(const char *utf8, escpos_link_write_fn write_f
 /** Prefer UART, else USB; returns ESP_ERR_NOT_FOUND if no printer. */
 esp_err_t escpos_printer_print_utf8(const char *utf8);
 
+/** Prefer UART, else USB JPEG raster print. */
+esp_err_t escpos_printer_print_jpeg_file(const char *filepath);
+
 #ifdef __cplusplus
 }
 #endif

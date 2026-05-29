@@ -22,7 +22,10 @@ alwaysApply: true
 
 ## 配置改动
 
-`sdkconfig` / `sdkconfig.defaults*` 变更须写明 `CONFIG_*` 键名及 **旧值 → 新值**。
+- **持久化配置只改 defaults**：`sdkconfig` 在 `.gitignore` 中，不提交；任何需保留的 `CONFIG_*` 必须同步写入 `sdkconfig.defaults` 和/或 `sdkconfig.defaults.release`（`CMakeLists.txt` 按此顺序 merge）。
+- **分工**：全构建共用 → `sdkconfig.defaults`；仅 Release 覆盖（日志/字体/`-Os` 等）→ `sdkconfig.defaults.release`（后加载，覆盖前者同名项）。
+- **本地试验**：可只改 `sdkconfig`；确认后 `idf.py save-defconfig` 或手工同步到上述 defaults，必要时删 `sdkconfig` 后 `idf.py build` 验证 merge。
+- **CHANGELOG**：`sdkconfig` / `sdkconfig.defaults*` 变更须写明 `CONFIG_*` 键名及 **旧值 → 新值**，并列出实际修改的 defaults 文件。
 
 ## 资源删除/排除
 

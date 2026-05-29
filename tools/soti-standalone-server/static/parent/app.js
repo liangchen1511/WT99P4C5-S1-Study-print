@@ -36,18 +36,60 @@
 
   const $ = (sel) => document.querySelector(sel);
 
+  function onSessionExpired() {
+    showLogin();
+    const err = $("#login-error");
+    err.textContent = "登录已过期（服务端重启后需重新登录），请重新输入密码";
+    err.hidden = false;
+  }
+
+  async function parseJsonResponse(r) {
+    return r.json().catch(() => ({}));
+  }
+
+  function authHeaders(extra) {
+    const headers = { ...(extra || {}) };
+    if (state.token) {
+      headers.Authorization = "Bearer " + state.token;
+    }
+    return headers;
+  }
+
+  /** JSON API；401 时退回登录页 */
   function api(path, opts = {}) {
     const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
     if (state.token) {
       headers.Authorization = "Bearer " + state.token;
     }
     return fetch(path, { ...opts, headers }).then(async (r) => {
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonResponse(r);
+      if (r.status === 401) {
+        onSessionExpired();
+        throw new Error("session_expired");
+      }
       if (!r.ok) {
         throw new Error(data.error || r.statusText);
       }
       return data;
     });
+  }
+
+  /** multipart 上传等；401 时退回登录页 */
+  async function parentUpload(path, body, extraHeaders) {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: authHeaders(extraHeaders),
+      body,
+    });
+    const data = await parseJsonResponse(r);
+    if (r.status === 401) {
+      onSessionExpired();
+      throw new Error("session_expired");
+    }
+    if (!r.ok) {
+      throw new Error(data.error || r.statusText);
+    }
+    return data;
   }
 
   function formatTime(ts) {
@@ -431,6 +473,7 @@
       policy: "管控策略",
       chat: "亲子聊天",
       album: "相册传图",
+      print: "远程打印",
     };
     $("#page-title").textContent = titles[name] || name;
     if (name === "chat") {
@@ -622,6 +665,9 @@
       if ($("#remember").checked) {
         localStorage.setItem(STORAGE_TOKEN, state.token);
         localStorage.setItem(STORAGE_DEVICE, state.deviceId);
+      } else {
+        localStorage.removeItem(STORAGE_TOKEN);
+        localStorage.setItem(STORAGE_DEVICE, state.deviceId);
       }
       showApp();
       await loadLive();
@@ -693,15 +739,7 @@
       fd.append("file", file);
       const rawName = fileList.length === 1 && nameOverride ? nameOverride : file.name;
       fd.append("name", safeAlbumFilename(rawName));
-      const r = await fetch("/parent/api/album/upload", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + state.token },
-        body: fd,
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        throw new Error(data.error || r.statusText);
-      }
+      const data = await parentUpload("/parent/api/album/upload", fd);
       const li = document.createElement("li");
       li.className = "history-item";
       const kb = Math.round((data.item.size || data.item.processed_size || 0) / 1024);
@@ -731,6 +769,83 @@
       return;
     }
     uploadAlbumFiles(input.files).catch((e) => alert("上传失败: " + e.message));
+  });
+
+  function appendPrintUploadResult(data) {
+    const msg = $("#print-upload-msg");
+    const list = $("#print-upload-list");
+    msg.hidden = true;
+    const li = document.createElement("li");
+    li.className = "history-item";
+    const item = data.item || {};
+    const kind = item.type === "text" ? "文字" : "图片";
+    let detail = kind + " · " + escapeHtml(item.name || "job");
+    if (item.size) {
+      detail += " (" + Math.round(item.size / 1024) + " KB)";
+    }
+    if (item.width && item.height) {
+      detail += " · " + item.width + "×" + item.height;
+    }
+    li.innerHTML =
+      '<div class="history-body"><p class="history-preview">已排队 #' +
+      item.id +
+      "：" +
+      detail +
+      "</p></div>";
+    list.prepend(li);
+    msg.textContent = "已加入打印队列，请在设备「打印」App 中确认出纸";
+    msg.hidden = false;
+  }
+
+  async function uploadPrintImage() {
+    const input = $("#print-image-file");
+    if (!input.files || !input.files.length) {
+      alert("请选择照片");
+      return;
+    }
+    const file = input.files[0];
+    const fd = new FormData();
+    fd.append("type", "image");
+    fd.append("file", file);
+    const nameOverride = ($("#print-image-name").value || "").trim();
+    fd.append("name", safeAlbumFilename(nameOverride || file.name));
+    fd.append("binarize", $("#print-binarize").checked ? "1" : "0");
+    const data = await parentUpload("/parent/api/print/upload", fd);
+    appendPrintUploadResult(data);
+    input.value = "";
+  }
+
+  async function uploadPrintText() {
+    const body = ($("#print-text-body").value || "").trim();
+    if (!body) {
+      alert("请输入要打印的文字");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("type", "text");
+    fd.append("body", body);
+    const title = ($("#print-text-name").value || "").trim();
+    if (title) {
+      fd.append("name", title);
+    }
+    const data = await parentUpload("/parent/api/print/upload", fd);
+    appendPrintUploadResult(data);
+    $("#print-text-body").value = "";
+  }
+
+  function alertUploadError(e) {
+    if (e && e.message === "session_expired") {
+      return;
+    }
+    alert("上传失败: " + (e && e.message ? e.message : String(e)));
+  }
+
+  $("#btn-print-image-upload").addEventListener("click", () => {
+    uploadPrintImage().catch(alertUploadError);
+  });
+
+  $("#btn-print-text-upload").addEventListener("click", () => {
+    uploadPrintText().catch(alertUploadError);
   });
 
   $("#btn-chat-send").addEventListener("click", () => {

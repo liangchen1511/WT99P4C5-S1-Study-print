@@ -9,6 +9,15 @@
 - API：`POST /parent/api/album/upload`（家长登录）、`GET /parent/api/album/file/{id}?off=&len=`、`POST /parent/api/album/ack`（设备 Token）。
 - HEIC 暂不支持（需第二期 `pillow-heif`）。
 
+## 远程打印
+
+- 侧栏 **远程打印**：家长上传 **图片**（JPG/PNG/WebP）或 **文字**（≤2000 字）；图片经 `print_preprocess.py` 缩放到热敏宽度 **≤384px**、高 ≤900，并做对比增强（保留蓝色线条）。
+- 设备后台约 **12 秒**轮询 `GET /parent/api/print/poll`；在桌面 **打印** App 中查看队列并点 **打印** 确认出纸（**不写入 SD 相册**）。
+- 图片 job：分片 `GET /parent/api/print/file/{id}?off=&len=` → SD 临时文件 → `escpos_printer_print_jpeg_file` → `POST /parent/api/print/ack`。
+- 文字 job：`GET /parent/api/print/text/{id}` → `escpos_printer_print_utf8` → ack。
+- API：`POST /parent/api/print/upload`（家长 Bearer 登录）、上述 poll/file/text/ack（设备 `UPLOAD_TOKEN` + `X-Device-Id`）。
+- 环境变量（可选）：`PARENT_PRINT_MAX_WIDTH=384`、`PARENT_PRINT_MAX_PENDING=5`、`PARENT_PRINT_MAX_TEXT_CHARS=2000`。
+
 ## 亲子聊天
 
 - 网页侧栏 **亲子聊天**：与家长端文字消息（轮询约 3 秒）。
@@ -64,7 +73,7 @@ bash /tmp/soti-ecs/deploy-parent-to-ecs.sh
 ## 设备固件
 
 - 上传 Header：`X-Device-Id: WT99-DEMO-01`
-- 组件：`components/parent_policy/`（2048 / 音乐 / 视频启动拦截）
+- 组件：`components/parent_policy/`（2048 / 音乐 / 视频启动拦截）；`components/parent_print_sync/`（远程打印 poll + 分片下载）
 
 ## 数据目录
 

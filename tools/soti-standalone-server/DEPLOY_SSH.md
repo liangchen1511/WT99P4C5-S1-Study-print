@@ -16,6 +16,7 @@ scp tools\soti-standalone-server\soti_answer_sanitize.py root@8.154.20.8:/opt/so
 scp tools\soti-standalone-server\parent_store.py root@8.154.20.8:/opt/soti/
 scp tools\soti-standalone-server\parent_routes.py root@8.154.20.8:/opt/soti/
 scp tools\soti-standalone-server\album_preprocess.py root@8.154.20.8:/opt/soti/
+scp tools\soti-standalone-server\print_preprocess.py root@8.154.20.8:/opt/soti/
 ssh root@8.154.20.8 "mkdir -p /opt/soti/static"
 scp -r tools\soti-standalone-server\static\parent root@8.154.20.8:/opt/soti/static/
 scp -r tools\soti-standalone-server\ecs root@8.154.20.8:/tmp/soti-ecs/

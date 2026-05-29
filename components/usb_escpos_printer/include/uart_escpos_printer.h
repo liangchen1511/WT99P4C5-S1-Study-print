@@ -44,6 +44,9 @@ esp_err_t uart_escpos_printer_test_small_123(void);
 /** Demo/1 style: center, bold, underline, 2×2, GBK「东为打印机」, feed 10 lines. */
 esp_err_t uart_escpos_printer_test_demo_format(void);
 
+/** CTS GPIO level: -1=disabled, 0/1=idle level (printer busy often pulls low). */
+int uart_escpos_cts_gpio_level(void);
+
 #ifdef __cplusplus
 }
 #endif

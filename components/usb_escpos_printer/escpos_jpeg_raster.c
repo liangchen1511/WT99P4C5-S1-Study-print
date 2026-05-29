@@ -4,10 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "sdkconfig.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -15,11 +20,25 @@
 #include "jpeg_decoder.h"
 
 #include "escpos_jpeg_raster.h"
+#include "uart_escpos_printer.h"
 
 static const char *TAG = "escpos_raster";
 
 #ifndef CONFIG_USB_ESC_POS_MAX_WIDTH
 #define CONFIG_USB_ESC_POS_MAX_WIDTH 384
+#endif
+
+#ifndef CONFIG_ESC_POS_RASTER_BAND_HEIGHT
+#define CONFIG_ESC_POS_RASTER_BAND_HEIGHT 24
+#endif
+#ifndef CONFIG_ESC_POS_RASTER_BAND_DELAY_MS
+#define CONFIG_ESC_POS_RASTER_BAND_DELAY_MS 100
+#endif
+#ifndef CONFIG_ESC_POS_RASTER_FINISH_FEED_DOTS
+#define CONFIG_ESC_POS_RASTER_FINISH_FEED_DOTS 32
+#endif
+#ifndef CONFIG_UART_ESC_POS_FLOW_CTS_GPIO
+#define CONFIG_UART_ESC_POS_FLOW_CTS_GPIO -1
 #endif
 
 #define JPEG_CAP_BYTES         (4 * 1024 * 1024)
@@ -41,50 +60,28 @@ static uint8_t rgb565_to_gray(uint16_t p)
     return (uint8_t)((r * 77 + g * 151 + b * 28) >> 8);
 }
 
-static esp_err_t escpos_header_text(escpos_link_write_fn write_fn, void *ctx, const char *filepath)
+static esp_err_t escpos_raster_finish_safe(escpos_link_write_fn write_fn, void *ctx)
 {
-    const char *base = strrchr(filepath, '/');
-    base = base ? base + 1 : filepath;
-    char line[128];
-    int n = snprintf(line, sizeof(line), "File: %s\r\n", base);
-    if (n <= 0 || n >= (int)sizeof(line)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    for (int i = 0; i < n; i++) {
-        unsigned char c = (unsigned char)line[i];
-        if (c < 0x20 || c > 0x7e) {
-            line[i] = '?';
-        }
-    }
-    static const uint8_t init_printer[] = {0x1B, 0x40};
-    esp_err_t err = write_fn(ctx, init_printer, sizeof(init_printer));
+    uint8_t fin[3] = {0x1B, 0x4A, (uint8_t)CONFIG_ESC_POS_RASTER_FINISH_FEED_DOTS};
+    esp_err_t err = write_fn(ctx, fin, sizeof(fin));
     if (err != ESP_OK) {
         return err;
     }
-    return write_fn(ctx, (const uint8_t *)line, (size_t)n);
+    static const uint8_t reset[] = {0x1B, 0x40};
+    return write_fn(ctx, reset, sizeof(reset));
 }
 
-static esp_err_t escpos_raster_gs_v0(escpos_link_write_fn write_fn, void *ctx, const uint8_t *mono, unsigned width,
-                                       unsigned height)
+static esp_err_t escpos_pack_band(const uint8_t *mono, unsigned width, unsigned y0, unsigned band_h,
+                                  unsigned threshold, uint8_t *packed)
 {
     const unsigned width_bytes = (width + 7) / 8;
-    const size_t pix_bytes = (size_t)width_bytes * (size_t)height;
-
-    uint8_t *packed = (uint8_t *)heap_caps_malloc(pix_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (packed == NULL) {
-        packed = (uint8_t *)malloc(pix_bytes);
-    }
-    if (packed == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    const unsigned threshold = 140;
-    for (unsigned y = 0; y < height; y++) {
+    for (unsigned y = 0; y < band_h; y++) {
+        const unsigned src_y = y0 + y;
         for (unsigned xb = 0; xb < width_bytes; xb++) {
             uint8_t byte = 0;
             for (unsigned bit = 0; bit < 8; bit++) {
                 unsigned x = xb * 8 + bit;
-                bool black = (x < width) && (mono[y * width + x] < threshold);
+                bool black = (x < width) && (mono[src_y * width + x] < threshold);
                 if (black) {
                     byte |= (uint8_t)(1u << (7 - bit));
                 }
@@ -92,28 +89,83 @@ static esp_err_t escpos_raster_gs_v0(escpos_link_write_fn write_fn, void *ctx, c
             packed[y * width_bytes + xb] = byte;
         }
     }
+    return ESP_OK;
+}
 
-    uint8_t hdr[8];
-    hdr[0] = 0x1D;
-    hdr[1] = 0x76;
-    hdr[2] = 0x30;
-    hdr[3] = 0x00;
-    hdr[4] = (uint8_t)(width_bytes & 0xff);
-    hdr[5] = (uint8_t)((width_bytes >> 8) & 0xff);
-    hdr[6] = (uint8_t)(height & 0xff);
-    hdr[7] = (uint8_t)((height >> 8) & 0xff);
+static esp_err_t escpos_raster_gs_v0_banded(escpos_link_write_fn write_fn, void *ctx, const uint8_t *mono,
+                                            unsigned width, unsigned height)
+{
+    const unsigned width_bytes = (width + 7) / 8;
+    const unsigned threshold = 140;
+    const unsigned band_max = (unsigned)CONFIG_ESC_POS_RASTER_BAND_HEIGHT;
+    if (band_max < 1) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
-    esp_err_t err = write_fn(ctx, hdr, sizeof(hdr));
-    if (err == ESP_OK) {
-        err = write_fn(ctx, packed, pix_bytes);
+    static const uint8_t init_printer[] = {0x1B, 0x40};
+    esp_err_t err = write_fn(ctx, init_printer, sizeof(init_printer));
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    const size_t band_cap = (size_t)width_bytes * (size_t)(band_max + 8);
+    uint8_t *packed = (uint8_t *)heap_caps_malloc(band_cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (packed == NULL) {
+        packed = (uint8_t *)malloc(band_cap);
+    }
+    if (packed == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    unsigned y0 = 0;
+    unsigned bands = 0;
+    while (y0 < height && err == ESP_OK) {
+        unsigned bh = height - y0;
+        if (bh > band_max) {
+            bh = band_max;
+        }
+        unsigned send_h = bh;
+#if CONFIG_ESC_POS_RASTER_PAD_48
+        if (send_h > 0 && (send_h % 48) == 0 && y0 + bh >= height) {
+            send_h = bh + 8;
+        }
+#endif
+        memset(packed, 0xFF, (size_t)width_bytes * send_h);
+        err = escpos_pack_band(mono, width, y0, bh, threshold, packed);
+        if (err != ESP_OK) {
+            break;
+        }
+
+        uint8_t hdr[8] = {0x1D, 0x76, 0x30, 0x00,
+                          (uint8_t)(width_bytes & 0xff), (uint8_t)((width_bytes >> 8) & 0xff),
+                          (uint8_t)(send_h & 0xff), (uint8_t)((send_h >> 8) & 0xff)};
+        err = write_fn(ctx, hdr, sizeof(hdr));
+        if (err == ESP_OK) {
+            err = write_fn(ctx, packed, (size_t)width_bytes * send_h);
+        }
+        bands++;
+        y0 += bh;
+        if ((bands % 8) == 0) {
+            const int cts = uart_escpos_cts_gpio_level();
+            ESP_LOGI(TAG, "band %u y=%u/%u cts_gpio%d=%d", bands, y0, height,
+                     CONFIG_UART_ESC_POS_FLOW_CTS_GPIO, cts);
+        }
+        if (y0 < height && err == ESP_OK && CONFIG_ESC_POS_RASTER_BAND_DELAY_MS > 0) {
+            const int cts0 = uart_escpos_cts_gpio_level();
+            vTaskDelay(pdMS_TO_TICKS(CONFIG_ESC_POS_RASTER_BAND_DELAY_MS));
+            const int cts1 = uart_escpos_cts_gpio_level();
+            if (cts0 >= 0 || cts1 >= 0) {
+                ESP_LOGI(TAG, "band %u delay %dms cts %d->%d", bands, CONFIG_ESC_POS_RASTER_BAND_DELAY_MS, cts0, cts1);
+            }
+        }
     }
     heap_caps_free(packed);
     if (err != ESP_OK) {
         return err;
     }
 
-    static const uint8_t feed[] = {0x1B, 0x64, 0x04};
-    return write_fn(ctx, feed, sizeof(feed));
+    ESP_LOGI(TAG, "banded_print total_h=%u band_h=%u bands=%u", height, band_max, bands);
+    return escpos_raster_finish_safe(write_fn, ctx);
 }
 
 static esp_err_t decode_jpeg_scaled_rgb565(const char *filepath, uint16_t **rgb565_out, unsigned *w_out, unsigned *h_out)
@@ -235,7 +287,8 @@ esp_err_t escpos_jpeg_raster_print(const char *filepath, escpos_link_write_fn wr
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "raster_print start %s", filepath);
+    ESP_LOGI(TAG, "raster_print start %s mode=GSv0-banded cts_gpio%d=%d", filepath,
+             CONFIG_UART_ESC_POS_FLOW_CTS_GPIO, uart_escpos_cts_gpio_level());
 
     uint16_t *rgb565 = NULL;
     unsigned img_w = 0, img_h = 0;
@@ -276,10 +329,7 @@ esp_err_t escpos_jpeg_raster_print(const char *filepath, escpos_link_write_fn wr
     downsample_box_gray(rgb565, img_w, img_h, gray, dw, dh);
     heap_caps_free(rgb565);
 
-    err = escpos_header_text(write_fn, ctx, filepath);
-    if (err == ESP_OK) {
-        err = escpos_raster_gs_v0(write_fn, ctx, gray, dw, dh);
-    }
+    err = escpos_raster_gs_v0_banded(write_fn, ctx, gray, dw, dh);
     heap_caps_free(gray);
     ESP_LOGI(TAG, "raster_print done %s -> %" PRIu32 "x%" PRIu32 " err=%s", filepath, (uint32_t)dw, (uint32_t)dh,
              esp_err_to_name(err));

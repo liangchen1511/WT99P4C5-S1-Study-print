@@ -6,8 +6,10 @@
 #include "power_manager.h"
 #include "Camera.hpp"
 #include "parent_album_sync.h"
+#include "parent_print_sync.h"
 #include "parent_chat/parent_chat_api.hpp"
 #include "parent_policy.hpp"
+#include "parent_net_gate.h"
 
 #include "esp_event.h"
 #include "esp_log.h"
@@ -23,10 +25,27 @@ static bool s_guard_registered;
 
 static volatile bool s_have_ip;
 static volatile bool s_screen_allows;
+static int64_t s_last_disc_us;
+
+static void pause_bg_http(const char *reason);
+static void stop_resume_timers(void);
+
+static void on_sta_disconnected(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    (void)arg;
+    (void)event_base;
+    (void)event_id;
+    (void)event_data;
+    s_last_disc_us = esp_timer_get_time();
+    s_have_ip = false;
+    stop_resume_timers();
+    pause_bg_http("wifi disc");
+}
 
 static void pause_bg_http(const char *reason)
 {
     parent_album_sync_pause(true);
+    parent_print_sync_pause(true);
     parent_chat_bg_pause(true);
     parent_policy_poll_pause(true);
     ESP_LOGI(TAG, "bg HTTP paused (%s)", reason != nullptr ? reason : "?");
@@ -51,6 +70,7 @@ static void resume_album_now(void)
         return;
     }
     parent_album_sync_pause(false);
+    parent_print_sync_pause(false);
     ESP_LOGI(TAG, "album sync resumed");
 }
 
@@ -96,6 +116,16 @@ static void resume_staggered(const char *reason)
 static void resume_timer_cb(void *arg)
 {
     (void)arg;
+    if (!s_have_ip || !power_manager_is_screen_on()) {
+        return;
+    }
+    const int64_t stable_us = 10 * 1000000LL;
+    const int64_t since_disc = esp_timer_get_time() - s_last_disc_us;
+    if (since_disc < stable_us) {
+        esp_timer_start_once(s_resume_timer, (uint64_t)(stable_us - since_disc));
+        return;
+    }
+    parent_reset_log_phase("got_ip");
     resume_staggered("delayed");
 }
 
@@ -116,7 +146,7 @@ static void on_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, 
     (void)event_id;
     (void)event_data;
     s_have_ip = true;
-    schedule_bg_resume(5000, "got ip");
+    schedule_bg_resume(15000, "got ip");
 }
 
 static void on_lost_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -125,9 +155,7 @@ static void on_lost_ip(void *arg, esp_event_base_t event_base, int32_t event_id,
     (void)event_base;
     (void)event_id;
     (void)event_data;
-    s_have_ip = false;
-    stop_resume_timers();
-    pause_bg_http("lost ip");
+    on_sta_disconnected(arg, event_base, event_id, event_data);
 }
 
 static void ensure_bg_guard(void)
@@ -137,6 +165,7 @@ static void ensure_bg_guard(void)
     }
     s_have_ip = false;
     s_screen_allows = true;
+    s_last_disc_us = 0;
 
     const esp_timer_create_args_t resume_args = {
         .callback = &resume_timer_cb,
@@ -175,7 +204,8 @@ static void ensure_bg_guard(void)
     }
 
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &on_got_ip, nullptr, nullptr);
-    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_lost_ip, nullptr, nullptr);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_LOST_IP, &on_lost_ip, nullptr, nullptr);
+    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_sta_disconnected, nullptr, nullptr);
     s_guard_registered = true;
     pause_bg_http("boot");
     ESP_LOGI(TAG, "SDIO bg guard ready");
