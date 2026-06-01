@@ -20,7 +20,6 @@
 #include "jpeg_decoder.h"
 
 #include "escpos_jpeg_raster.h"
-#include "uart_escpos_printer.h"
 
 static const char *TAG = "escpos_raster";
 
@@ -36,9 +35,6 @@ static const char *TAG = "escpos_raster";
 #endif
 #ifndef CONFIG_ESC_POS_RASTER_FINISH_FEED_DOTS
 #define CONFIG_ESC_POS_RASTER_FINISH_FEED_DOTS 32
-#endif
-#ifndef CONFIG_UART_ESC_POS_FLOW_CTS_GPIO
-#define CONFIG_UART_ESC_POS_FLOW_CTS_GPIO -1
 #endif
 
 #define JPEG_CAP_BYTES         (4 * 1024 * 1024)
@@ -145,18 +141,8 @@ static esp_err_t escpos_raster_gs_v0_banded(escpos_link_write_fn write_fn, void 
         }
         bands++;
         y0 += bh;
-        if ((bands % 8) == 0) {
-            const int cts = uart_escpos_cts_gpio_level();
-            ESP_LOGI(TAG, "band %u y=%u/%u cts_gpio%d=%d", bands, y0, height,
-                     CONFIG_UART_ESC_POS_FLOW_CTS_GPIO, cts);
-        }
         if (y0 < height && err == ESP_OK && CONFIG_ESC_POS_RASTER_BAND_DELAY_MS > 0) {
-            const int cts0 = uart_escpos_cts_gpio_level();
             vTaskDelay(pdMS_TO_TICKS(CONFIG_ESC_POS_RASTER_BAND_DELAY_MS));
-            const int cts1 = uart_escpos_cts_gpio_level();
-            if (cts0 >= 0 || cts1 >= 0) {
-                ESP_LOGI(TAG, "band %u delay %dms cts %d->%d", bands, CONFIG_ESC_POS_RASTER_BAND_DELAY_MS, cts0, cts1);
-            }
         }
     }
     heap_caps_free(packed);
@@ -164,7 +150,7 @@ static esp_err_t escpos_raster_gs_v0_banded(escpos_link_write_fn write_fn, void 
         return err;
     }
 
-    ESP_LOGI(TAG, "banded_print total_h=%u band_h=%u bands=%u", height, band_max, bands);
+    ESP_LOGD(TAG, "banded_print total_h=%u band_h=%u bands=%u", height, band_max, bands);
     return escpos_raster_finish_safe(write_fn, ctx);
 }
 
@@ -287,8 +273,7 @@ esp_err_t escpos_jpeg_raster_print(const char *filepath, escpos_link_write_fn wr
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "raster_print start %s mode=GSv0-banded cts_gpio%d=%d", filepath,
-             CONFIG_UART_ESC_POS_FLOW_CTS_GPIO, uart_escpos_cts_gpio_level());
+    ESP_LOGD(TAG, "raster_print start %s mode=GSv0-banded", filepath);
 
     uint16_t *rgb565 = NULL;
     unsigned img_w = 0, img_h = 0;
@@ -331,7 +316,7 @@ esp_err_t escpos_jpeg_raster_print(const char *filepath, escpos_link_write_fn wr
 
     err = escpos_raster_gs_v0_banded(write_fn, ctx, gray, dw, dh);
     heap_caps_free(gray);
-    ESP_LOGI(TAG, "raster_print done %s -> %" PRIu32 "x%" PRIu32 " err=%s", filepath, (uint32_t)dw, (uint32_t)dh,
+    ESP_LOGD(TAG, "raster_print done %s -> %" PRIu32 "x%" PRIu32 " err=%s", filepath, (uint32_t)dw, (uint32_t)dh,
              esp_err_to_name(err));
     return err;
 }

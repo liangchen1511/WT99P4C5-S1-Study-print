@@ -7,6 +7,7 @@
 #include "ParentChat.hpp"
 #include "parent_chat_api.hpp"
 #include "parent_chat_launcher.hpp"
+#include "parent_chat_pinyin_dict.h"
 #include "lv_font_ui_zh.h"
 
 #include "lvgl.h"
@@ -23,6 +24,25 @@
 LV_IMG_DECLARE(img_app_parent_chat);
 
 static const char *TAG = "ParentChat";
+static const lv_coord_t PCHAT_CAND_H = 48;
+static const lv_coord_t PCHAT_INPUT_ROW_H = 56;
+
+#if LV_USE_IME_PINYIN
+static void styleCandPanel(lv_obj_t *cand)
+{
+    lv_obj_set_style_text_font(cand, &lv_font_ui_zh_22, 0);
+    lv_obj_set_style_text_color(cand, lv_color_hex(0x0F172A), 0);
+    lv_obj_set_style_bg_opa(cand, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(cand, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_border_width(cand, 1, 0);
+    lv_obj_set_style_border_color(cand, lv_color_hex(0xCBD5E1), 0);
+    lv_obj_set_style_bg_opa(cand, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(cand, lv_color_hex(0xFFFFFF), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(cand, lv_color_hex(0x0F172A), LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(cand, LV_OPA_COVER, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(cand, lv_color_hex(0xE2E8F0), LV_PART_ITEMS | LV_STATE_PRESSED);
+}
+#endif
 
 struct ParentChatUiOp {
     ParentChat *app;
@@ -154,9 +174,22 @@ void ParentChat::appendMessage(int msg_id, const char *sender, const char *body,
         lv_obj_set_style_text_align(time_lbl, LV_TEXT_ALIGN_RIGHT, 0);
     }
 
-    if (_scroll) {
+    if (_scroll && !_suppress_msg_scroll) {
         lv_obj_scroll_to_view(row, LV_ANIM_ON);
     }
+}
+
+void ParentChat::scrollToBottom(bool anim)
+{
+    if (_scroll == nullptr || _msg_col == nullptr) {
+        return;
+    }
+    lv_obj_update_layout(_msg_col);
+    const uint32_t n = lv_obj_get_child_cnt(_msg_col);
+    if (n == 0) {
+        return;
+    }
+    lv_obj_scroll_to_view(lv_obj_get_child(_msg_col, n - 1), anim ? LV_ANIM_ON : LV_ANIM_OFF);
 }
 
 void ParentChat::applyServerMessages(const std::vector<ParentChatMsg> &msgs, bool initial)
@@ -165,11 +198,21 @@ void ParentChat::applyServerMessages(const std::vector<ParentChatMsg> &msgs, boo
         lv_obj_clean(_msg_col);
         _last_id = 0;
     }
+    const bool batch = initial && !msgs.empty();
+    if (batch) {
+        _suppress_msg_scroll = true;
+    }
     for (const auto &m : msgs) {
         appendMessage(m.id, m.sender.c_str(), m.body.c_str(), m.created_at);
         if (m.id > _last_id) {
             _last_id = m.id;
         }
+    }
+    if (batch) {
+        _suppress_msg_scroll = false;
+        scrollToBottom(false);
+    } else if (!msgs.empty()) {
+        scrollToBottom(true);
     }
 }
 
@@ -246,9 +289,7 @@ void ParentChat::doSend(void)
         return;
     }
     lv_textarea_set_text(_input, "");
-    if (_keyboard != nullptr) {
-        lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
-    }
+    hideInputPanels();
     if (sent.id > 0) {
         const char *show = sent.body.empty() ? txt : sent.body.c_str();
         double ts = sent.created_at > 0 ? sent.created_at : (double)time(nullptr);
@@ -256,6 +297,84 @@ void ParentChat::doSend(void)
         if (sent.id > _last_id) {
             _last_id = sent.id;
         }
+    }
+}
+
+void ParentChat::updateScrollPadding(void)
+{
+    if (_scroll == nullptr || _inputStack == nullptr) {
+        return;
+    }
+    lv_coord_t pad = PCHAT_INPUT_ROW_H;
+    if (_keyboard != nullptr && !lv_obj_has_flag(_keyboard, LV_OBJ_FLAG_HIDDEN)) {
+        pad += _kb_h;
+    }
+#if LV_USE_IME_PINYIN
+    if (_ime != nullptr) {
+        lv_obj_t *cp = lv_ime_pinyin_get_cand_panel(_ime);
+        if (cp != nullptr && !lv_obj_has_flag(cp, LV_OBJ_FLAG_HIDDEN)) {
+            pad += PCHAT_CAND_H;
+        }
+    }
+#endif
+    lv_obj_set_style_pad_bottom(_scroll, pad + 8, 0);
+    lv_obj_update_layout(_inputStack);
+    lv_obj_update_layout(_scroll);
+}
+
+void ParentChat::hideInputPanels(void)
+{
+    if (_keyboard != nullptr) {
+        lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    }
+#if LV_USE_IME_PINYIN
+    if (_ime != nullptr) {
+        lv_obj_t *cp = lv_ime_pinyin_get_cand_panel(_ime);
+        if (cp != nullptr) {
+            lv_obj_add_flag(cp, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+#endif
+    updateScrollPadding();
+}
+
+void ParentChat::layoutInputPanels(void)
+{
+    if (_keyboard != nullptr) {
+        lv_obj_clear_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    }
+#if LV_USE_IME_PINYIN
+    if (_ime != nullptr && _inputRow != nullptr && _inputStack != nullptr) {
+        lv_obj_t *cp = lv_ime_pinyin_get_cand_panel(_ime);
+        if (cp != nullptr) {
+            lv_obj_set_parent(cp, _inputStack);
+            lv_obj_add_flag(cp, LV_OBJ_FLAG_IGNORE_LAYOUT);
+            lv_obj_set_width(cp, lv_pct(100));
+            lv_obj_set_height(cp, PCHAT_CAND_H);
+            lv_obj_update_layout(_inputRow);
+            lv_obj_align_to(cp, _inputRow, LV_ALIGN_OUT_TOP_MID, 0, 0);
+        }
+    }
+#endif
+    updateScrollPadding();
+}
+
+static void deferred_layout_input(void *p)
+{
+    ParentChat *app = static_cast<ParentChat *>(p);
+    if (app) {
+        app->layoutInputPanels();
+    }
+}
+
+void ParentChat::onKeyboardEvent(lv_event_t *e)
+{
+    ParentChat *app = static_cast<ParentChat *>(lv_event_get_user_data(e));
+    if (app == nullptr) {
+        return;
+    }
+    if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
+        lv_async_call(deferred_layout_input, app);
     }
 }
 
@@ -268,12 +387,10 @@ void ParentChat::onTextareaEvent(lv_event_t *e)
     const lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_CLICKED || code == LV_EVENT_FOCUSED) {
         lv_keyboard_set_textarea(app->_keyboard, app->_input);
-        lv_obj_clear_flag(app->_keyboard, LV_OBJ_FLAG_HIDDEN);
-        if (app->_scroll) {
-            lv_obj_scroll_to_view(app->_input, LV_ANIM_ON);
-        }
+        app->layoutInputPanels();
+        app->scrollToBottom(true);
     } else if (code == LV_EVENT_CANCEL || code == LV_EVENT_DEFOCUSED) {
-        lv_obj_add_flag(app->_keyboard, LV_OBJ_FLAG_HIDDEN);
+        app->hideInputPanels();
     }
 }
 
@@ -331,20 +448,37 @@ void ParentChat::buildUi(lv_coord_t vw, lv_coord_t vh)
     lv_obj_set_style_pad_row(_msg_col, 10, 0);
     lv_obj_clear_flag(_msg_col, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *foot = lv_obj_create(_root);
-    lv_obj_set_width(foot, lv_pct(100));
-    lv_obj_set_height(foot, 56);
-    lv_obj_set_style_bg_color(foot, lv_color_hex(0xF7F7F7), 0);
-    lv_obj_set_style_border_width(foot, 1, 0);
-    lv_obj_set_style_border_side(foot, LV_BORDER_SIDE_TOP, 0);
-    lv_obj_set_style_border_color(foot, lv_color_hex(0xD1D5DB), 0);
-    lv_obj_set_style_pad_all(foot, 8, 0);
-    lv_obj_clear_flag(foot, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(foot, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(foot, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(foot, 8, 0);
+    _kb_h = 200;
+    if (vh / 3 < _kb_h) {
+        _kb_h = vh / 3;
+    }
 
-    _input = lv_textarea_create(foot);
+    _inputStack = lv_obj_create(_root);
+    lv_obj_set_width(_inputStack, lv_pct(100));
+    lv_obj_set_height(_inputStack, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(_inputStack, lv_color_hex(0xF7F7F7), 0);
+    lv_obj_set_style_bg_opa(_inputStack, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(_inputStack, 1, 0);
+    lv_obj_set_style_border_side(_inputStack, LV_BORDER_SIDE_TOP, 0);
+    lv_obj_set_style_border_color(_inputStack, lv_color_hex(0xD1D5DB), 0);
+    lv_obj_set_style_pad_all(_inputStack, 0, 0);
+    lv_obj_clear_flag(_inputStack, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(_inputStack, LV_FLEX_FLOW_COLUMN);
+    lv_obj_add_flag(_inputStack, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+
+    lv_obj_t *input_row = lv_obj_create(_inputStack);
+    _inputRow = input_row;
+    lv_obj_set_width(input_row, lv_pct(100));
+    lv_obj_set_height(input_row, PCHAT_INPUT_ROW_H);
+    lv_obj_set_style_bg_opa(input_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(input_row, 0, 0);
+    lv_obj_set_style_pad_all(input_row, 8, 0);
+    lv_obj_clear_flag(input_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(input_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(input_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(input_row, 8, 0);
+
+    _input = lv_textarea_create(input_row);
     lv_obj_set_flex_grow(_input, 1);
     lv_obj_set_height(_input, 40);
     lv_textarea_set_one_line(_input, true);
@@ -356,7 +490,7 @@ void ParentChat::buildUi(lv_coord_t vw, lv_coord_t vh)
     lv_obj_add_event_cb(_input, onTextareaEvent, LV_EVENT_CANCEL, this);
     lv_obj_add_event_cb(_input, onTextareaEvent, LV_EVENT_DEFOCUSED, this);
 
-    lv_obj_t *send_btn = lv_btn_create(foot);
+    lv_obj_t *send_btn = lv_btn_create(input_row);
     lv_obj_set_size(send_btn, 80, 40);
     lv_obj_set_style_bg_color(send_btn, lv_color_hex(0x2563EB), 0);
     lv_obj_t *send_lbl = lv_label_create(send_btn);
@@ -366,18 +500,31 @@ void ParentChat::buildUi(lv_coord_t vw, lv_coord_t vh)
     lv_obj_center(send_lbl);
     lv_obj_add_event_cb(send_btn, onSendClicked, LV_EVENT_CLICKED, this);
 
-    _keyboard = lv_keyboard_create(_root);
+    _keyboard = lv_keyboard_create(_inputStack);
     lv_obj_set_width(_keyboard, lv_pct(100));
-    lv_coord_t kb_h = 220;
-    if (vh / 3 < kb_h) {
-        kb_h = vh / 3;
-    }
-    lv_obj_set_height(_keyboard, kb_h);
+    lv_obj_set_height(_keyboard, _kb_h);
     lv_keyboard_set_mode(_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
     lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
-    /* 勿用 LV_EVENT_ALL：def_event_cb 内发 CANCEL 会再次进入回调导致栈溢出 */
-    lv_obj_add_event_cb(_keyboard, lv_keyboard_def_event_cb, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_keyboard_set_textarea(_keyboard, _input);
+
+#if LV_USE_IME_PINYIN
+    _ime = lv_ime_pinyin_create(_root);
+    lv_obj_add_flag(_ime, LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_font(_ime, &lv_font_ui_zh_22, 0);
+    lv_ime_pinyin_set_keyboard(_ime, _keyboard);
+    lv_ime_pinyin_set_dict(_ime, (lv_pinyin_dict_t *)parent_chat_pinyin_dict);
+    lv_obj_t *cand = lv_ime_pinyin_get_cand_panel(_ime);
+    lv_obj_set_parent(cand, _inputStack);
+    lv_obj_add_flag(cand, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_width(cand, lv_pct(100));
+    lv_obj_set_height(cand, PCHAT_CAND_H);
+    styleCandPanel(cand);
+    lv_obj_align_to(cand, _inputRow, LV_ALIGN_OUT_TOP_MID, 0, 0);
+    lv_obj_add_flag(cand, LV_OBJ_FLAG_HIDDEN);
+#endif
+    lv_obj_add_event_cb(_keyboard, onKeyboardEvent, LV_EVENT_VALUE_CHANGED, this);
+
+    updateScrollPadding();
 }
 
 bool ParentChat::run(void)
@@ -401,6 +548,7 @@ bool ParentChat::pause(void)
 bool ParentChat::resume(void)
 {
     startPoll();
+    scrollToBottom(false);
     return true;
 }
 
@@ -417,6 +565,9 @@ bool ParentChat::close(void)
     _scroll = nullptr;
     _msg_col = nullptr;
     _input = nullptr;
+    _inputRow = nullptr;
+    _inputStack = nullptr;
     _keyboard = nullptr;
+    _ime = nullptr;
     return true;
 }

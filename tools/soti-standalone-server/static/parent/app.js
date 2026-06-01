@@ -824,10 +824,6 @@
     const fd = new FormData();
     fd.append("type", "text");
     fd.append("body", body);
-    const title = ($("#print-text-name").value || "").trim();
-    if (title) {
-      fd.append("name", title);
-    }
     const data = await parentUpload("/parent/api/print/upload", fd);
     appendPrintUploadResult(data);
     $("#print-text-body").value = "";

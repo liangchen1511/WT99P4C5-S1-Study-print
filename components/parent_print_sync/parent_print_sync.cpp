@@ -70,7 +70,7 @@ static void sdio_bg_http_pause(bool pause)
         parent_print_sync_pause(true);
         parent_chat_bg_pause(true);
         parent_policy_poll_pause(true);
-        ESP_LOGI(TAG, "SDIO bg HTTP paused (print)");
+        ESP_LOGD(TAG, "SDIO bg HTTP paused (print)");
         return;
     }
     if (!s_sdio_bg_paused) {
@@ -78,14 +78,14 @@ static void sdio_bg_http_pause(bool pause)
     }
     s_sdio_bg_paused = false;
     if (!power_manager_is_screen_on() || !have_sta_ip()) {
-        ESP_LOGI(TAG, "SDIO bg HTTP stay paused (no ip or screen off)");
+        ESP_LOGD(TAG, "SDIO bg HTTP stay paused (no ip or screen off)");
         return;
     }
     parent_album_sync_pause(false);
     parent_print_sync_pause(false);
     parent_chat_bg_pause(false);
     parent_policy_poll_pause(false);
-    ESP_LOGI(TAG, "SDIO bg HTTP resumed (print done)");
+    ESP_LOGD(TAG, "SDIO bg HTTP resumed (print done)");
 }
 
 static void notify_status(const char *line)
@@ -387,8 +387,11 @@ static bool parse_poll_body(const std::string &body)
             }
             if (job.type == PARENT_PRINT_JOB_TYPE_TEXT) {
                 const cJSON *jtitle = cJSON_GetObjectItemCaseSensitive(it, "title");
-                if (cJSON_IsString(jtitle) && jtitle->valuestring) {
+                if (cJSON_IsString(jtitle) && jtitle->valuestring && jtitle->valuestring[0] != '\0') {
                     snprintf(job.text_title, sizeof(job.text_title), "%s", jtitle->valuestring);
+                } else if (job.name[0] != '\0' && strcmp(job.name, "文字") != 0 &&
+                           strncmp(job.name, "job_", 4) != 0) {
+                    snprintf(job.text_title, sizeof(job.text_title), "%s", job.name);
                 }
             }
             s_jobs.push_back(job);
@@ -438,14 +441,9 @@ static esp_err_t print_text_job(const parent_print_job_t &job)
         cJSON_Delete(root);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    std::string to_print;
-    if (job.text_title[0] != '\0') {
-        to_print = job.text_title;
-    } else {
-        to_print = txt->valuestring;
-    }
+    const char *to_print = txt->valuestring;
     cJSON_Delete(root);
-    esp_err_t err = escpos_printer_print_utf8(to_print.c_str());
+    esp_err_t err = escpos_printer_print_utf8(to_print);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "text print err=%s", esp_err_to_name(err));
     }
@@ -473,7 +471,7 @@ static esp_err_t print_image_job(const parent_print_job_t &job)
     }
     unlink(part_path);
 
-    ESP_LOGI(TAG, "download_start id=%d bytes=%u", job.id, (unsigned)job.size);
+    ESP_LOGD(TAG, "download_start id=%d bytes=%u", job.id, (unsigned)job.size);
 
     FILE *f = fopen(part_path, "wb");
     if (f == nullptr) {
@@ -522,7 +520,7 @@ static esp_err_t print_image_job(const parent_print_job_t &job)
     }
     free(buf);
     fclose(f);
-    ESP_LOGI(TAG, "download_done id=%d bytes=%u", job.id, (unsigned)off);
+    ESP_LOGD(TAG, "download_done id=%d bytes=%u", job.id, (unsigned)off);
 
     if (off != job.size) {
         unlink(part_path);
@@ -540,14 +538,14 @@ static esp_err_t print_image_job(const parent_print_job_t &job)
         fclose(vf);
     }
 
-    ESP_LOGI(TAG, "raster_begin id=%d path=%s", job.id, part_path);
+    ESP_LOGD(TAG, "raster_begin id=%d path=%s", job.id, part_path);
     err = escpos_printer_print_jpeg_file(part_path);
     unlink(part_path);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "jpeg print err=%s", esp_err_to_name(err));
         return err;
     }
-    ESP_LOGI(TAG, "raster_done id=%d err=%s", job.id, esp_err_to_name(err));
+    ESP_LOGD(TAG, "raster_done id=%d err=%s", job.id, esp_err_to_name(err));
     return ESP_OK;
 }
 

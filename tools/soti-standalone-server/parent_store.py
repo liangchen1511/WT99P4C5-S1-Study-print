@@ -926,7 +926,7 @@ def print_get_row(print_id: int, device_id: str) -> dict[str, Any] | None:
         c = _connect()
         row = c.execute(
             """
-            SELECT id, job_type, safe_name, file_path, size, width, height
+            SELECT id, job_type, safe_name, file_path, size, width, height, meta_json
             FROM print_inbox WHERE id=? AND device_id=? AND acked_at IS NULL
             """,
             (print_id, device_id),
@@ -937,6 +937,11 @@ def print_get_row(print_id: int, device_id: str) -> dict[str, Any] | None:
 
 
 def print_read_text(print_id: int, device_id: str) -> str | None:
+    payload = print_read_text_payload(print_id, device_id)
+    return None if payload is None else payload.get("body")
+
+
+def print_read_text_payload(print_id: int, device_id: str) -> dict[str, Any] | None:
     row = print_get_row(print_id, device_id)
     if row is None or row["job_type"] != "text":
         return None
@@ -948,9 +953,16 @@ def print_read_text(print_id: int, device_id: str) -> str | None:
             raw = f.read(MAX_PRINT_TEXT_BYTES + 1)
         if len(raw) > MAX_PRINT_TEXT_BYTES:
             return None
-        return raw.decode("utf-8")
+        body = raw.decode("utf-8")
     except (OSError, UnicodeDecodeError):
         return None
+    title = ""
+    try:
+        meta = json.loads(row.get("meta_json") or "{}")
+        title = str(meta.get("title") or "").strip()
+    except (json.JSONDecodeError, TypeError):
+        title = ""
+    return {"body": body, "title": title}
 
 
 def print_read_chunk(print_id: int, device_id: str, offset: int, length: int) -> bytes | None:

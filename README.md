@@ -37,7 +37,7 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 | **SoTi** | Question search + error-note printing |
 | **PhotoAlbum** | SD JPEG preview; **SoTi** / **Sync** / delete |
 | **Print** | Thermal wiring & menuconfig notes (not the print entry point) |
-| **ParentChat** | Parent-station messaging |
+| **ParentChat** | Parent-station messaging; device **Pinyin IME** (26-key + candidate bar) |
 
 ## SoTi Application
 
@@ -105,7 +105,7 @@ The desktop **Print** app shows wiring help only; check `uart_escpos` / `usb_esc
 | SoTi | Selected photo → SoTi upload |
 | Sync | Pull pending photos from parent station (`alb_sync_bg`) |
 | Policy | `parent_policy` app schedule / toggles |
-| Chat | `ParentChat` + launcher unread badge |
+| Chat | `ParentChat` + launcher unread badge; device-side **Pinyin input** (regenerate dict: `python tools/gen_parent_chat_pinyin_dict.py`) |
 
 Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resumed** after IP / screen on to reduce SDIO restarts. See `camera_power_bridge.cpp` (`cam_pwr:` logs).
 

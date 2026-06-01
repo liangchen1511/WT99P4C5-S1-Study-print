@@ -396,11 +396,11 @@ def handle_get(handler: BaseHTTPRequestHandler) -> bool:
         device_id = str(qs.get("device_id", [DEFAULT_DEVICE_ID])[0]).strip().upper()
         if handler.headers.get("X-Device-Id"):
             device_id = handler.headers.get("X-Device-Id", device_id).strip().upper()
-        body = print_read_text(print_id, device_id)
-        if body is None:
+        payload = print_read_text_payload(print_id, device_id)
+        if payload is None:
             _json_response(handler, 404, {"ok": False, "error": "not found"})
             return True
-        _json_response(handler, 200, {"ok": True, "body": body})
+        _json_response(handler, 200, {"ok": True, "body": payload["body"], "title": payload.get("title") or ""})
         return True
 
     return False
@@ -585,11 +585,8 @@ def handle_post(handler: BaseHTTPRequestHandler) -> bool:
                 if not body_field:
                     _json_response(handler, 400, {"ok": False, "error": "empty text"})
                     return True
-                title = ""
-                if "name" in form and form["name"].value:
-                    title = str(form["name"].value).strip()
                 text_bytes = body_field.encode("utf-8") if isinstance(body_field, str) else body_field
-                row = print_insert_text(device_id, title, text_bytes)
+                row = print_insert_text(device_id, "", text_bytes)
                 _json_response(handler, 200, {"ok": True, "item": row})
                 return True
             if job_type != "image":
@@ -698,7 +695,9 @@ def _serve_static(handler: BaseHTTPRequestHandler, name: str) -> bool:
     handler.send_response(200)
     handler.send_header("Content-Type", ctype)
     handler.send_header("Content-Length", str(len(data)))
-    if name.endswith((".css", ".js", ".json", ".html")):
+    if name.endswith(".html"):
+        handler.send_header("Cache-Control", "no-store, must-revalidate")
+    elif name.endswith((".css", ".js", ".json")):
         handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(data)

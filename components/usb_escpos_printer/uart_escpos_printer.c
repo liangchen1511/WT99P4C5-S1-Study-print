@@ -169,7 +169,6 @@ static esp_err_t uart_escpos_hw_install(void)
     }
     if (s_cts_gpio >= 0) {
         gpio_set_pull_mode((gpio_num_t)s_cts_gpio, GPIO_PULLUP_ONLY);
-        ESP_LOGI(TAG, "CTS GPIO%d level=%d (1=idle 0=busy)", s_cts_gpio, gpio_get_level((gpio_num_t)s_cts_gpio));
     }
     if (s_tx_gpio >= 0) {
         gpio_set_drive_capability((gpio_num_t)s_tx_gpio, GPIO_DRIVE_CAP_3);
@@ -199,7 +198,7 @@ static esp_err_t uart_escpos_install_locked(void)
     }
 
     s_inited_ok = true;
-    ESP_LOGI(TAG,
+    ESP_LOGD(TAG,
              "UART ESC/POS: port=%d UART%d TX=GPIO%d RX=GPIO%d CTS=GPIO%d flow=%s %d 8N1",
              CONFIG_UART_ESC_POS_PORT, (int)UART_ESC_UART_NUM, s_tx_gpio, s_rx_gpio, s_cts_gpio,
              s_cts_gpio >= 0 ? "CTS" : "none", CONFIG_UART_ESC_POS_BAUD);
@@ -207,7 +206,7 @@ static esp_err_t uart_escpos_install_locked(void)
     const uint8_t wake[] = {0x1B, 0x40, '\r', '\n'};
     int written = 0;
     (void)uart_escpos_send_bytes_locked(wake, sizeof(wake), &written);
-    ESP_LOGI(TAG, "wake ESC @ wrote %d bytes", written);
+    ESP_LOGD(TAG, "wake ESC @ wrote %d bytes", written);
 
     return ESP_OK;
 }
@@ -335,12 +334,4 @@ esp_err_t uart_escpos_print_jpeg_file(const char *filepath)
         return ESP_ERR_INVALID_STATE;
     }
     return escpos_jpeg_raster_print(filepath, uart_escpos_link_write, NULL);
-}
-
-int uart_escpos_cts_gpio_level(void)
-{
-    if (s_cts_gpio < 0) {
-        return -1;
-    }
-    return gpio_get_level((gpio_num_t)s_cts_gpio);
 }
