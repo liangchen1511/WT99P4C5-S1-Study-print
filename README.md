@@ -1,10 +1,10 @@
 # WT99P4C5-S1 Example Project
 
-**Current version: V0.0.1** (SoTi error-notebook text printing)
+**Current version: V1.2.1** (Ultimate parent web console · SoTi history photo download)
 
 [中文版本](./README_CN.md)
 
-> Branch scope and removed features: [`docs/DESKTOP_BRANCH.md`](docs/DESKTOP_BRANCH.md). Change log: [`docs/OPTIMIZATION_CHANGELOG.md`](docs/OPTIMIZATION_CHANGELOG.md).
+> Branch scope and removed features: [`docs/DESKTOP_BRANCH.md`](docs/DESKTOP_BRANCH.md). Engineering change log: [`docs/OPTIMIZATION_CHANGELOG.md`](docs/OPTIMIZATION_CHANGELOG.md).
 
 ## Project Overview
 
@@ -17,7 +17,7 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 - 📚 **SoTi** — Capture or pick JPEG → segmented upload → Doubao vision → plain-text answer; **Print question / Print with answer** on answer screen
 - 🖨️ **ESC/POS thermal** — UART TTL (J6) or USB host; UTF-8→GBK; 58 mm Font B full width (42 columns)
 - 📷 **Camera / album** — 1280×960 preview & JPEG; album **SoTi** / **Sync** / delete (no photo print button)
-- 👪 **Parent station** — Policy, background album sync, chat unread badge (SDIO traffic staggered)
+- 👪 **Parent station** — Web console at `/parent/` (policy, history, chat, album sync); device-side policy, chat unread badge (SDIO traffic staggered)
 - 🖥️ **Display & audio** — MIPI DSI 1024×600; ES8311 + MP3 / shutter click
 - 💾 **Storage** — SPIFFS + SD card
 - 🌐 **Network** — Wi‑Fi (**2.4 GHz only** via C5) + Ethernet
@@ -101,11 +101,13 @@ The desktop **Print** app shows wiring help only; check `uart_escpos` / `usb_esc
 
 | Feature | Notes |
 |---------|--------|
+| **Web console** | `http://<ECS-IP>/parent/` — dashboard, history, policy, chat, album/print upload; deploy UI: `tools/soti-standalone-server/deploy-parent-ui.ps1` ([PARENT_PORTAL.md](./tools/soti-standalone-server/PARENT_PORTAL.md)) |
 | Album | List/preview/delete JPEGs on SD root |
 | SoTi | Selected photo → SoTi upload |
 | Sync | Pull pending photos from parent station (`alb_sync_bg`) |
 | Policy | `parent_policy` app schedule / toggles |
 | Chat | `ParentChat` + launcher unread badge; device-side **Pinyin input** (regenerate dict: `python tools/gen_parent_chat_pinyin_dict.py`) |
+| History | SQLite search history with optional thumb; **download photo** from detail drawer (V1.2.0) |
 
 Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resumed** after IP / screen on to reduce SDIO restarts. See `camera_power_bridge.cpp` (`cam_pwr:` logs).
 
