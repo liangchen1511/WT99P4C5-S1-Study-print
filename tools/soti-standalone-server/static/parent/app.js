@@ -3,6 +3,13 @@
 
   const STORAGE_TOKEN = "parent_token";
   const STORAGE_DEVICE = "parent_device";
+  const STORAGE_PASSWORD = "parent_password";
+  const STORAGE_THEME = "parent_theme";
+  const STORAGE_PALETTE = "parent_palette";
+  const THEMES = ["light", "dark", "black"];
+  const THEME_LABELS = { light: "浅色", dark: "深色", black: "纯黑" };
+  const PALETTES = ["amber", "glass", "teal", "champagne"];
+  const PALETTE_LABELS = { amber: "暖琥珀", glass: "紫雾玻璃", teal: "青绿编辑", champagne: "香槟金" };
   const MODE_LABELS = {
     solve: "解题",
     translate: "翻译",
@@ -35,6 +42,139 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
+
+  function getEffectiveTheme() {
+    const cur = document.documentElement.dataset.theme;
+    if (THEMES.indexOf(cur) >= 0) return cur;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function updateThemeBtn() {
+    const btn = $("#btn-theme");
+    if (!btn) return;
+    btn.title = "主题：" + THEME_LABELS[getEffectiveTheme()] + "（点击切换）";
+  }
+
+  function toggleTheme() {
+    const cur = getEffectiveTheme();
+    const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(STORAGE_THEME, next);
+    updateThemeBtn();
+  }
+
+  function initTheme() {
+    const saved = localStorage.getItem(STORAGE_THEME);
+    if (THEMES.indexOf(saved) >= 0) {
+      document.documentElement.dataset.theme = saved;
+    } else if (!document.documentElement.dataset.theme) {
+      document.documentElement.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    updateThemeBtn();
+  }
+
+  function getPalette() {
+    const p = document.documentElement.dataset.palette;
+    return PALETTES.indexOf(p) >= 0 ? p : "glass";
+  }
+
+  function updatePaletteBtn() {
+    const btn = $("#btn-palette");
+    if (!btn) return;
+    btn.textContent = PALETTE_LABELS[getPalette()];
+    btn.title = "配色：" + PALETTE_LABELS[getPalette()] + "（点击切换）";
+  }
+
+  function initPalette() {
+    try {
+      const saved = localStorage.getItem(STORAGE_PALETTE);
+      if (PALETTES.indexOf(saved) >= 0) document.documentElement.dataset.palette = saved;
+      else if (!document.documentElement.dataset.palette) document.documentElement.dataset.palette = "glass";
+    } catch (e) {
+      document.documentElement.dataset.palette = "glass";
+    }
+    updatePaletteBtn();
+  }
+
+  function cyclePalette() {
+    document.documentElement.dataset.palette = PALETTES[(PALETTES.indexOf(getPalette()) + 1) % PALETTES.length];
+    localStorage.setItem(STORAGE_PALETTE, document.documentElement.dataset.palette);
+    updatePaletteBtn();
+  }
+
+  function vt(fn) {
+    if (document.startViewTransition) document.startViewTransition(fn);
+    else fn();
+  }
+
+  function animStatEl(el, to) {
+    if (!el || to == null || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (el && to != null) el.textContent = String(to);
+      return;
+    }
+    const n = parseInt(to, 10);
+    if (isNaN(n)) { el.textContent = String(to); return; }
+    const t0 = performance.now();
+    function step(now) {
+      const p = Math.min(1, (now - t0) / 900);
+      el.textContent = String(Math.round(n * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  const gsapOk = typeof gsap !== "undefined";
+
+  function runPanelMotion(name) {
+    const panel = $("#panel-" + name);
+    if (!panel || !gsapOk || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const items = panel.querySelectorAll(".shell, .history-item, .form-stack");
+    if (!items.length) return;
+    gsap.fromTo(items, { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.65, stagger: 0.05, ease: "power3.out" });
+  }
+
+  function bindSpotlight() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    document.querySelectorAll(".spot").forEach((el) => {
+      el.addEventListener("mousemove", (e) => {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty("--spot-x", ((e.clientX - r.left) / r.width * 100).toFixed(1) + "%");
+        el.style.setProperty("--spot-y", ((e.clientY - r.top) / r.height * 100).toFixed(1) + "%");
+      });
+    });
+  }
+
+  const overlay = () => $("#nav-overlay");
+  const menuBtn = () => $("#menu-btn");
+
+  function closeMenu() {
+    const o = overlay(), m = menuBtn();
+    if (!o) return;
+    o.classList.remove("is-open");
+    o.hidden = true;
+    o.setAttribute("aria-hidden", "true");
+    if (m) { m.classList.remove("is-open"); m.setAttribute("aria-expanded", "false"); }
+  }
+
+  function openMenu() {
+    const o = overlay(), m = menuBtn();
+    if (!o) return;
+    o.hidden = false;
+    o.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => o.classList.add("is-open"));
+    if (m) { m.classList.add("is-open"); m.setAttribute("aria-expanded", "true"); }
+  }
+
+  initTheme();
+  initPalette();
+  bindSpotlight();
+  const themeBtn = $("#btn-theme");
+  if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
+  const palBtn = $("#btn-palette");
+  if (palBtn) palBtn.addEventListener("click", cyclePalette);
+  const mb = menuBtn();
+  if (mb) mb.addEventListener("click", () => { overlay() && overlay().classList.contains("is-open") ? closeMenu() : openMenu(); });
+  if (overlay()) overlay().addEventListener("click", (e) => { if (e.target === overlay()) closeMenu(); });
 
   function onSessionExpired() {
     showLogin();
@@ -143,6 +283,37 @@
     return d.innerHTML;
   }
 
+  let drawerItem = null;
+
+  function syncDrawerDownload(item) {
+    drawerItem = item;
+    const btn = $("#drawer-download");
+    if (!btn) return;
+    btn.hidden = !(item && item.thumb_url);
+  }
+
+  async function downloadDrawerPhoto() {
+    if (!drawerItem || !drawerItem.thumb_url) return;
+    const btn = $("#drawer-download");
+    const url = drawerItem.thumb_url;
+    const name = "搜题-" + (drawerItem.id || Date.now()) + ".jpg";
+    btn.disabled = true;
+    try {
+      const r = await fetch(url, { headers: authHeaders() });
+      if (!r.ok) throw new Error("下载失败");
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      alert(e.message || "下载失败");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function openDrawer(item) {
     const drawer = $("#drawer");
     const thumb = $("#drawer-thumb");
@@ -156,6 +327,7 @@
     }
     drawer.hidden = false;
     drawer.classList.add("drawer--open");
+    syncDrawerDownload(item);
     if (item.id) {
       api("/parent/api/history/" + item.id)
         .then((res) => {
@@ -165,6 +337,7 @@
               thumb.src = res.item.thumb_url;
               thumb.hidden = false;
             }
+            syncDrawerDownload(Object.assign({}, item, res.item));
           }
         })
         .catch(() => {});
@@ -174,6 +347,9 @@
   function closeDrawer() {
     const drawer = $("#drawer");
     if (!drawer) return;
+    drawerItem = null;
+    const dl = $("#drawer-download");
+    if (dl) dl.hidden = true;
     drawer.hidden = true;
     drawer.classList.remove("drawer--open");
   }
@@ -347,11 +523,12 @@
 
   function applyDashboard(data) {
     const st = data.stats || {};
-    $("#stat-today").textContent = st.today ?? "0";
-    $("#stat-week").textContent = st.week ?? "0";
+    animStatEl($("#stat-today"), st.today ?? "0");
+    animStatEl($("#stat-week"), st.week ?? "0");
     $("#stat-policy").textContent = data.policy_name || "—";
     $("#sidebar-online").classList.toggle("dot--online", !!st.online);
     $("#sidebar-online-text").textContent = st.online ? "在线" : "离线";
+    if ($("#sidebar-online")) $("#sidebar-online").title = st.online ? "在线" : "离线";
 
     if (data.stats) {
       const on = $("#chat-online");
@@ -434,29 +611,33 @@
   }
 
   function showApp() {
-    const login = $("#view-login");
-    const shell = $("#view-app");
-    login.classList.remove("view--active");
-    login.hidden = true;
-    login.style.display = "";
-    shell.hidden = false;
-    $("#sidebar-device").textContent = state.deviceId;
-    $("#top-device-pill").textContent = state.deviceId;
+    vt(() => {
+      const login = $("#view-login");
+      const shell = $("#view-app");
+      login.classList.remove("view--active");
+      login.hidden = true;
+      shell.hidden = false;
+      $("#sidebar-device").textContent = state.deviceId;
+      $("#top-device-pill").textContent = state.deviceId;
+    });
   }
 
   function showLogin() {
+    closeMenu();
     closeDrawer();
     stopChatPanel();
     state.token = "";
     localStorage.removeItem(STORAGE_TOKEN);
-    $("#view-app").hidden = true;
-    const login = $("#view-login");
-    login.hidden = false;
-    login.classList.add("view--active");
-    login.style.display = "";
+    vt(() => {
+      $("#view-app").hidden = true;
+      const login = $("#view-login");
+      login.hidden = false;
+      login.classList.add("view--active");
+    });
   }
 
   function switchView(name) {
+    closeMenu();
     document.querySelectorAll(".nav-item").forEach((n) => {
       n.classList.toggle("nav-item--active", n.dataset.view === name);
     });
@@ -476,11 +657,9 @@
       print: "远程打印",
     };
     $("#page-title").textContent = titles[name] || name;
-    if (name === "chat") {
-      startChatPanel();
-    } else {
-      stopChatPanel();
-    }
+    if (name === "chat") startChatPanel();
+    else stopChatPanel();
+    runPanelMotion(name);
   }
 
   function formatChatTime(ts) {
@@ -662,12 +841,14 @@
       });
       state.token = res.token;
       state.deviceId = res.device_id;
-      if ($("#remember").checked) {
+      if ($("#remember").checked) localStorage.setItem(STORAGE_DEVICE, state.deviceId);
+      else localStorage.removeItem(STORAGE_DEVICE);
+      if ($("#save-password").checked) {
+        localStorage.setItem(STORAGE_PASSWORD, password);
         localStorage.setItem(STORAGE_TOKEN, state.token);
-        localStorage.setItem(STORAGE_DEVICE, state.deviceId);
       } else {
+        localStorage.removeItem(STORAGE_PASSWORD);
         localStorage.removeItem(STORAGE_TOKEN);
-        localStorage.setItem(STORAGE_DEVICE, state.deviceId);
       }
       showApp();
       await loadLive();
@@ -859,9 +1040,14 @@
     e.stopPropagation();
     closeDrawer();
   });
+  $("#drawer-download").addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    downloadDrawerPhoto();
+  });
   $("#drawer-backdrop").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDrawer();
+    if (e.key === "Escape") { closeDrawer(); closeMenu(); }
   });
 
   bindPolicyFormInteractions();
@@ -869,6 +1055,12 @@
 
   if (localStorage.getItem(STORAGE_DEVICE)) {
     $("#device-code").value = localStorage.getItem(STORAGE_DEVICE);
+    if ($("#remember")) $("#remember").checked = true;
+  }
+  const savedPwd = localStorage.getItem(STORAGE_PASSWORD);
+  if (savedPwd) {
+    $("#password").value = savedPwd;
+    if ($("#save-password")) $("#save-password").checked = true;
   }
 
   if (state.token) {

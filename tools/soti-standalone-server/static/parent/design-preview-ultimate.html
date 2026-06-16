@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<!-- 终极预览：v3圆角菜单 + Raycast悬停 + v5数字/scroll + v4 GSAP + 四套配色 -->
+<html lang="zh-CN" data-palette="glass" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>学习守护 · 终极视觉预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@500;600&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="design-preview-ultimate.css"/>
+</head>
+<body>
+<div class="bg-static" aria-hidden="true"></div>
+<div class="bg-mesh" aria-hidden="true"></div>
+<div id="root">
+<nav class="ctrl" aria-label="预览控制">
+<span class="ctrl__tag">Ultimate</span>
+<div class="ctrl__scenes">
+<button type="button" class="scene-btn is-on" data-scene="login">登录</button>
+<button type="button" class="scene-btn" data-scene="dashboard">总览</button>
+<button type="button" class="scene-btn" data-scene="history">记录</button>
+<button type="button" class="scene-btn" data-scene="policy">策略</button>
+<button type="button" class="scene-btn" data-scene="chat">聊天</button>
+<button type="button" class="scene-btn" data-scene="album">相册</button>
+<button type="button" class="scene-btn" data-scene="print">打印</button>
+</div>
+<span class="ctrl-sep"></span>
+<button type="button" class="ctrl__pal" id="btn-palette" title="配色">紫雾玻璃</button>
+<span class="ctrl-sep"></span>
+<button type="button" class="icon-btn" id="btn-theme" title="主题">◐</button>
+</nav>
+
+<section id="scene-login" class="scene is-on">
+<div class="login-split">
+<div class="login-copy">
+<span class="login-eyebrow">Parent Console</span>
+<h1>学习<br/>守护</h1>
+<p class="muted">整合圆角 UI、全屏菜单、聚光灯悬停、数字滚动与 GSAP 切页动画。</p>
+<button type="button" class="btn-pill btn-pill--primary group" data-scene="dashboard">进入控制台<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+</div>
+<div class="login-form-wrap">
+<div class="shell ix spot"><div class="core pad login-form">
+<p class="login-eyebrow" style="margin-top:0">家长登录</p>
+<label><span>设备码</span><input type="text" value="WT99-DEMO-01" disabled/></label>
+<label><span>家长密码</span><input type="password" value="demo-pass" disabled/></label>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group" data-scene="dashboard">进入控制台<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+<p class="login-foot muted">静态预览 · 不连接 API</p>
+</div></div>
+</div>
+</div>
+</section>
+
+<div id="scene-app" class="scene">
+<header class="app-head">
+<h2 class="app-head__title" id="page-title">总览</h2>
+<div class="app-head__meta">
+<span class="device-tag">WT99-DEMO-01</span>
+<span class="status-dot" title="在线"></span>
+<button type="button" class="icon-btn" id="btn-theme-inner" title="主题">◐</button>
+<button type="button" class="menu-btn" id="menu-btn" aria-label="打开导航" aria-expanded="false"><span></span><span></span><span></span></button>
+</div>
+</header>
+<main class="app-main">
+
+<section id="panel-dashboard" class="panel is-on">
+<div class="bento">
+<article class="stat-a shell ix spot gsap-hide"><div class="core pad"><p class="stat-lbl">今日搜题</p><p class="stat-num" data-count="11">0</p></div></article>
+<article class="stat-b shell ix spot gsap-hide"><div class="core pad"><p class="stat-lbl">本周搜题</p><p class="stat-num" data-count="43">0</p></div></article>
+<section class="bento-feed shell ix spot gsap-hide"><div class="core pad">
+<div class="card-head"><h3>最近搜题</h3><button type="button" class="link-txt" data-goto="history">查看全部</button></div>
+<div class="history-stack">
+<div class="history-row" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-a/104/104" alt="" width="56" height="56"/></div><div><div class="history-meta"><span class="mode-tag">解题</span><span class="history-time">今天 18:42</span></div><p class="history-preview">已知 f(x)=2x²-3x+1，求 f(2) 及图像与 x 轴交点。</p></div></div>
+<div class="history-row" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-b/104/104" alt="" width="56" height="56"/></div><div><div class="history-meta"><span class="mode-tag">翻译</span><span class="history-time">今天 17:15</span></div><p class="history-preview">The experiment was repeated under controlled conditions.</p></div></div>
+</div>
+</div></section>
+<article class="stat-c shell ix spot gsap-hide"><div class="core pad"><p class="stat-lbl">当前策略</p><p class="stat-num stat-num--sm">工作日 19:00–21:00</p></div></article>
+<section class="bento-ctrl shell ix spot gsap-hide"><div class="core pad">
+<div class="card-head"><h3>快捷管控</h3></div>
+<div class="toggle-list">
+<div class="toggle-row"><span>2048 游戏</span><label class="switch"><input type="checkbox" checked/><span></span></label></div>
+<div class="toggle-row"><span>视频</span><label class="switch"><input type="checkbox" checked/><span></span></label></div>
+<div class="toggle-row"><span>音乐</span><label class="switch"><input type="checkbox"/><span></span></label></div>
+</div>
+<p class="rule-chip">工作日 19:00–21:00 禁止娱乐应用</p>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group" style="margin-top:1.25rem" data-goto="policy">编辑时段策略<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+</div></section>
+</div>
+</section>
+
+<section id="panel-history" class="panel" hidden>
+<div class="toolbar gsap-hide"><select class="select" disabled><option>全部模式</option></select><button type="button" class="btn-pill btn-pill--ghost">刷新</button></div>
+<p class="drawer-hint gsap-hide">点击记录预览详情 · 滚动入场动画</p>
+<div class="shell ix spot gsap-hide"><div class="core pad">
+<div class="history-stack">
+<div class="history-row" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-c/104/104" alt=""/></div><div><div class="history-meta"><span class="mode-tag">讲解</span><span class="history-time">昨天 20:03</span></div><p class="history-preview">勾股定理：直角三角形两直角边平方和等于斜边平方。</p></div></div>
+<div class="history-row" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-d/104/104" alt=""/></div><div><div class="history-meta"><span class="mode-tag">批改</span><span class="history-time">昨天 16:28</span></div><p class="history-preview">第 3 题计算过程正确，最终答案写错单位。</p></div></div>
+<div class="history-row" data-open-drawer><div class="history-thumb history-thumb--empty">—</div><div><div class="history-meta"><span class="mode-tag">摘要</span><span class="history-time">6月7日</span></div><p class="history-preview">本章重点：一元二次方程求根公式与判别式。</p></div></div>
+</div>
+</div></div>
+</section>
+
+<section id="panel-chat" class="panel" hidden>
+<div class="shell ix spot gsap-hide"><div class="core pad chat-wrap">
+<div class="card-head"><h3>与孩子聊天</h3><span class="muted">设备在线</span></div>
+<div class="chat-msgs">
+<div class="chat-line chat-line--child"><div class="chat-bubble chat-bubble--child"><span class="chat-meta">18:20</span>妈妈，今天数学作业做完了</div></div>
+<div class="chat-line chat-line--parent"><div class="chat-bubble chat-bubble--parent"><span class="chat-meta">18:22</span>很好，19 点后再玩 2048</div></div>
+<div class="chat-line chat-line--child"><div class="chat-bubble chat-bubble--child"><span class="chat-meta">18:23</span>好的</div></div>
+</div>
+<div class="chat-compose"><textarea rows="2" placeholder="输入消息…" disabled></textarea><button type="button" class="btn-pill btn-pill--primary group">发送<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></span></button></div>
+</div></div>
+</section>
+
+<section id="panel-album" class="panel" hidden>
+<div class="shell ix spot gsap-hide"><div class="core pad form-stack">
+<h3 style="margin:0">传图到设备 SD 卡</h3>
+<p class="muted">JPG/PNG/WebP 自动转 JPG 并缩小后同步。</p>
+<label class="form-block"><span class="form-label">选择照片</span><input type="file" disabled/></label>
+<label class="form-block"><span class="form-label">文件名（可选）</span><input type="text" placeholder="留空则用原文件名" disabled/></label>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group">上传到设备队列<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12l7-7 7 7"/></svg></span></button>
+</div></div>
+</section>
+
+<section id="panel-print" class="panel" hidden>
+<div class="panel-stack">
+<div class="shell ix spot gsap-hide"><div class="core pad form-stack">
+<h3 style="margin:0">远程打印 · 图片</h3>
+<p class="muted">缩放到热敏纸宽度，设备确认后出纸。</p>
+<label class="form-block"><span class="form-label">选择照片</span><input type="file" disabled/></label>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group">加入打印队列<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 9V2h12v7"/></svg></span></button>
+</div></div>
+<div class="shell ix spot gsap-hide"><div class="core pad form-stack">
+<h3 style="margin:0">远程打印 · 文字</h3>
+<label class="form-block"><span class="form-label">正文</span><textarea rows="5" placeholder="最多 2000 字…" disabled></textarea></label>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group">加入打印队列<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg></span></button>
+</div></div>
+</div>
+</section>
+
+<section id="panel-policy" class="panel" hidden>
+<div class="panel-stack">
+<div class="shell ix spot gsap-hide"><div class="core pad">
+<h3 style="margin:0 0 .5rem">应用开关</h3>
+<div class="toggle-list" style="margin-top:1rem">
+<div class="toggle-row"><span>2048 游戏</span><label class="switch"><input type="checkbox" checked/><span></span></label></div>
+<div class="toggle-row"><span>视频</span><label class="switch"><input type="checkbox" checked/><span></span></label></div>
+<div class="toggle-row"><span>音乐</span><label class="switch"><input type="checkbox"/><span></span></label></div>
+</div>
+</div></div>
+<div class="shell ix spot gsap-hide"><div class="core pad">
+<h3 style="margin:0 0 .5rem">学习时段</h3>
+<div class="day-chips"><button type="button" class="day-chip day-chip--on" data-day>一</button><button type="button" class="day-chip day-chip--on" data-day>二</button><button type="button" class="day-chip day-chip--on" data-day>三</button><button type="button" class="day-chip day-chip--on" data-day>四</button><button type="button" class="day-chip day-chip--on" data-day>五</button><button type="button" class="day-chip" data-day>六</button><button type="button" class="day-chip" data-day>日</button></div>
+<div class="form-row" style="margin-top:1rem"><label class="form-block"><span class="form-label">开始</span><input type="time" value="19:00" disabled/></label><label class="form-block"><span class="form-label">结束</span><input type="time" value="21:00" disabled/></label></div>
+<button type="button" class="btn-pill btn-pill--primary btn-pill--block group" style="margin-top:1rem">保存策略<span class="btn-pill__dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 6L9 17l-5-5"/></svg></span></button>
+</div></div>
+</div>
+</section>
+</main>
+</div>
+
+<div id="nav-overlay" class="nav-overlay" hidden aria-hidden="true">
+<nav class="nav-overlay__links" id="preview-nav" aria-label="主导航">
+<button type="button" data-scene="dashboard" class="is-on">总览</button>
+<button type="button" data-scene="history">搜题记录</button>
+<button type="button" data-scene="policy">管控策略</button>
+<button type="button" data-scene="chat">亲子聊天</button>
+<button type="button" data-scene="album">相册传图</button>
+<button type="button" data-scene="print">远程打印</button>
+</nav>
+</div>
+
+<aside id="drawer" class="drawer" hidden>
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<div class="drawer-sheet spot">
+<button type="button" class="drawer-close" id="drawer-close" aria-label="关闭">×</button>
+<h3>记录详情</h3>
+<img class="drawer-img" src="https://picsum.photos/seed/soti-a/480/240" alt="题目缩略图"/>
+<pre class="drawer-pre">【解题】已知 f(x)=2x²-3x+1
+f(2)=3；与 x 轴交点 (1,0) 与 (1/2,0)</pre>
+</div>
+</aside>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="design-preview-ultimate.js"></script>
+</body>
+</html>

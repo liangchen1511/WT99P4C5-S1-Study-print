@@ -4,8 +4,9 @@ managed_components/
 dependencies.lock
 sdkconfig
 .cursorignore
+.cursor/
 .cache/
 sdkconfig.old
 
-# 本地工程改动记录，不上传 GitHub（见 .cursor/rules/engineering-standards.mdc）
+# 本地工程改动记录，不上传 GitHub
 docs/OPTIMIZATION_CHANGELOG.md

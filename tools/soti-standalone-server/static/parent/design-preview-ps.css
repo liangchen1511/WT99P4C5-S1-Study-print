@@ -1,0 +1,48 @@
+/* PlayStation 风格预览 · design-md/playstation.com */
+@import url("design-preview-linear.css");
+:root {
+  --font: "SST", "Helvetica Neue", "PingFang SC", sans-serif;
+  --bg: #1a1a1a; --s1: #252525; --s2: #2e2e2e; --line: #3d3d3d;
+  --ink: #fff; --muted: #b0b0b0; --accent: #0070d1; --accent-h: #3399ff; --on-accent: #fff;
+  --r: 999px; --rl: 16px; --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+[data-theme="light"] { --bg: #f0f0f0; --s1: #fff; --s2: #e8e8e8; --line: #ccc; --ink: #000; --muted: #555; }
+.pv-ctrl { border-radius: var(--r); background: var(--s1); }
+.pv-ctrl button { border-radius: var(--r); font-weight: 600; }
+.pv-ctrl button.is-on { background: var(--accent); color: var(--on-accent); }
+.scene-login { background: linear-gradient(180deg, var(--accent) 0%, var(--accent) 42%, var(--bg) 42%); padding-top: 80px; }
+.login-wrap { grid-template-columns: 1fr; max-width: 480px; text-align: center; }
+.login-wrap h1 { font-size: clamp(1.75rem, 5vw, 2.25rem); font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+.login-wrap > div:first-child p { color: rgba(255,255,255,0.85); }
+.login-wrap > div:first-child .btn--p { background: #fff; color: var(--accent); border-radius: var(--r); font-weight: 700; padding: 12px 32px; }
+.login-wrap > div:first-child .btn--p:hover { background: #e6f2ff; }
+.card { border: none; box-shadow: 0 8px 32px rgba(0,0,0,0.25); margin-top: 24px; }
+.btn--p { border-radius: var(--r); font-weight: 700; padding: 10px 24px; }
+.btn--s { border-radius: var(--r); }
+#scene-app.is-on { flex-direction: column; }
+.pv-side { width: 100%; border-right: none; background: var(--accent); padding: 0; flex-direction: row; align-items: stretch; overflow-x: auto; }
+.pv-side__brand { display: none; }
+.pv-nav { display: flex; gap: 0; padding: 0; width: max-content; min-width: 100%; }
+.pv-nav button { color: rgba(255,255,255,0.75); border-radius: 0; padding: 14px 20px; font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; }
+.pv-nav button.is-on { color: #fff; background: rgba(0,0,0,0.15); border-color: #fff; border: none; border-bottom: 3px solid #fff; }
+.pv-nav button:hover { color: #fff; background: rgba(0,0,0,0.1); }
+.pv-side__foot { display: none; }
+#btn-theme-app { margin: 8px 12px !important; border-radius: var(--r) !important; border-color: rgba(255,255,255,0.4) !important; background: rgba(255,255,255,0.15) !important; color: #fff !important; }
+.pv-main { padding: 32px 20px 64px; }
+.pv-main h2 { color: var(--accent); font-weight: 700; font-size: 24px; }
+.panel.is-on > *:nth-child(odd) .stat, .panel.is-on > *:nth-child(odd) .tile, .panel.is-on > .tile:nth-child(odd), .panel.is-on > .card:nth-child(odd) { background: var(--s1); }
+.panel.is-on > *:nth-child(even) .stat { background: color-mix(in srgb, var(--accent) 8%, var(--s1)); }
+.stats .stat:nth-child(2) { background: var(--s2); border-color: var(--accent); }
+.stat { border-radius: var(--rl); }
+.stat small { color: var(--accent); font-weight: 700; }
+.tile, .card { border-radius: var(--rl); border: none; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+.tag { border-radius: var(--r); background: var(--accent); color: var(--on-accent); }
+.hrow { border-radius: var(--rl); }
+.hrow:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sw i { border-radius: var(--r); }
+.note { border-radius: var(--rl); background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.day { border-radius: var(--r); }
+.day.on { background: var(--accent); }
+.bub { border-radius: var(--rl); }
+.bub--p { background: var(--accent); }
+.drawer__sheet { border-left: 4px solid var(--accent); }

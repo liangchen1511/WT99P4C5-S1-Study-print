@@ -27,6 +27,8 @@
 
 ## 登录
 
+- 设备码默认 `WT99-DEMO-01`；**记住本设备**（`parent_device`）与 **保存密码**（`parent_password` + `parent_token` 免登）可独立勾选，勾选框均在文字后方。
+
 | 项 | 默认值 |
 |----|--------|
 | 设备码 | `WT99-DEMO-01`（与固件 `SOTI_DEVICE_ID` 一致） |
@@ -65,9 +67,35 @@ bash /tmp/soti-ecs/deploy-parent-to-ecs.sh
 
 访问地址必须是 **`http://<公网IP>/parent/`**（带 `/parent/`），不要只打开 `http://<IP>/`（旧配置根路径会 404）。
 
+## 界面与主题
+
+- 正式页：`/parent/`（`index.html` + `styles.css` + `app.js`）— **Ultimate 视觉**（v3 圆角 shell、三条杠菜单、聚光灯悬停、数字滚动、GSAP 切页、四套配色×三主题）
+- 设计预览 mock 仍保留：`design-preview-ultimate.html` 等（见下方历史预览列表）
+- **设计预览 v3**（独立视觉稿，不引用 `styles.css`）：`/parent/design-preview（2）.html` + `design-preview-v3.css`
+- **设计预览 Ultimate**（整合版，推荐）：`/parent/design-preview-ultimate.html` + `design-preview-ultimate.css/js`
+  - **UI**：v3 双层圆角 shell/core + 三条杠全屏导航菜单
+  - **交互**：Raycast 式卡片悬停（`.ix` 上浮 + `.spot` 聚光灯）+ 记录行侧滑
+  - **动效**：v5 数字滚动 + `animation-timeline: view()` 列表入场 + v4 GSAP 切页 stagger + View Transitions 场景切换
+  - **配色**（顶栏点击切换，各含浅色/深色/纯黑，**仅改色不改字体**）：暖琥珀（v2）、紫雾玻璃（v3）、青绿编辑（v4）、香槟金（v5）；◐ 切换明暗主题；写入 `parent_palette` / `parent_theme`
+- **设计预览 v4**（gpt-taste 独立稿）：`/parent/design-preview-v4.html` + `design-preview-v4.css` + `design-preview-v4.js`（Cinematic 登录、密集 Bento、底栏 Dock、GSAP）
+- **设计预览 v5**（高端前端技巧）：`/parent/design-preview-v5.html` + `design-preview-v5.css` + `design-preview-v5.js`
+  - View Transitions API 场景切换
+  - CSS `@property` 驱动动态网格背景 + SVG 噪点
+  - 聚光灯卡片（鼠标追踪 radial-gradient）
+  - 磁吸按钮、数字滚动计数、spring 抽屉/开关
+  - `animation-timeline: view()` scroll-driven 列表入场
+  - `@container` Bento 自适应、毛玻璃 Dock 滑块指示器
+- **品牌炫技预览**（静态 mock，不改动 v2/v3/v4；共用 `design-preview-mock.js` + `design-preview-linear.css` 基座）：
+  - **Linear**：`/parent/design-preview-linear.html` — 紫丁香 accent、侧栏导航、hairline 边框
+  - **Bugatti**：`/parent/design-preview-bugatti.html` — 纯黑奢华、大写 display、outline pill 按钮
+  - **PlayStation**：`/parent/design-preview-ps.html` — `#0070d1` 蓝带登录、顶栏 tab 导航
+  - **Raycast**：`/parent/design-preview-raycast.html` — 命令面板侧栏、`⌘K` 提示、红色 hero 条
+- **双主题**：默认跟随系统 `prefers-color-scheme`（映射为暖色 **深色**）；登录后点顶栏 **◐** 循环切换 **浅色 → 深色 → 纯黑**（写入 `localStorage` 键 `parent_theme`，取值 `light` / `dark` / `black`）
+- **主色**：暖琥珀（亲子控制台），侧栏 SVG 图标；手机宽度下导航收为底部 tab 栏
+
 ## 功能
 
-- **搜题历史**：每次识题成功写入 SQLite（`data/parent.db`），可选 320px 缩略图
+- **搜题历史**：每次识题成功写入 SQLite（`data/parent.db`），可选 320px 缩略图；详情抽屉底部可 **下载照片**（`搜题-{id}.jpg`）
 - **管控策略**：应用开关 + 时段 JSON；设备每 5 分钟 `GET /parent/api/policy`
 
 ## 设备固件

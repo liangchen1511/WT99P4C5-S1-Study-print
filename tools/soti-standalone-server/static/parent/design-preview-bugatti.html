@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<!-- 设计预览 · Bugatti 风格 mock，非生产 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>学习守护 · Bugatti 风格预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="design-preview-bugatti.css"/>
+</head>
+<body>
+<nav class="pv-ctrl" aria-label="预览控制">
+<span class="pv-ctrl__tag">Bugatti</span>
+<div class="pv-ctrl__scenes">
+<button type="button" class="scene-btn is-on" data-scene="login">登录</button>
+<button type="button" class="scene-btn" data-scene="dashboard">总览</button>
+<button type="button" class="scene-btn" data-scene="history">记录</button>
+<button type="button" class="scene-btn" data-scene="policy">策略</button>
+<button type="button" class="scene-btn" data-scene="chat">聊天</button>
+<button type="button" class="scene-btn" data-scene="album">相册</button>
+<button type="button" class="scene-btn" data-scene="print">打印</button>
+</div>
+<button type="button" id="btn-theme" title="主题">◐</button>
+</nav>
+
+<section id="scene-login" class="pv-scene scene-login is-on">
+<div class="login-wrap">
+<div>
+<h1>Guardian<br/>Heritage</h1>
+<p>WT99 智能学习设备 · 远程管控、搜题回溯、亲子聊天与相册传图。静态 mock，不连接 API。</p>
+<button type="button" class="btn btn--p" data-scene="dashboard">进入控制台</button>
+</div>
+<div class="card reveal-on">
+<label><span>设备码</span><input type="text" value="WT99-DEMO-01" disabled style="font-family:var(--mono)"/></label>
+<label><span>家长密码</span><input type="password" value="demo-pass" disabled/></label>
+<button type="button" class="btn btn--p btn--block" data-scene="dashboard">登录预览</button>
+</div>
+</div>
+</section>
+
+<div id="scene-app" class="pv-scene">
+<aside class="pv-side">
+<div class="pv-side__brand">学习守护</div>
+<nav class="pv-nav" aria-label="应用导航">
+<button type="button" class="is-on" data-scene="dashboard">总览</button>
+<button type="button" data-scene="history">搜题记录</button>
+<button type="button" data-scene="policy">管控策略</button>
+<button type="button" data-scene="chat">亲子聊天</button>
+<button type="button" data-scene="album">相册传图</button>
+<button type="button" data-scene="print">远程打印</button>
+</nav>
+<div class="pv-side__foot">WT99-DEMO-01 · 在线</div>
+<button type="button" id="btn-theme-app" title="主题" style="margin:8px 12px;border:1px solid var(--line);background:var(--s1);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer">◐</button>
+</aside>
+<main class="pv-main">
+<h2 id="page-title">总览</h2>
+
+<section id="panel-dashboard" class="panel is-on">
+<div class="stats reveal-on">
+<article class="stat"><small>今日搜题</small><strong>11</strong></article>
+<article class="stat"><small>本周搜题</small><strong>43</strong></article>
+<article class="stat"><small>当前策略</small><strong class="sm">工作日 19:00–21:00</strong></article>
+</div>
+<div class="grid2">
+<section class="tile reveal-on">
+<div class="tile-head"><h3>最近搜题</h3><button type="button" class="link" data-goto="history">查看全部</button></div>
+<div class="hlist">
+<div class="hrow" data-open-drawer><div class="hthumb"><img src="https://picsum.photos/seed/soti-a/88/88" alt=""/></div><div class="hbody"><div class="hmeta"><span class="tag">解题</span><span class="htime">今天 18:42</span></div><p class="hprev">已知 f(x)=2x²-3x+1，求 f(2) 及图像与 x 轴交点。</p></div></div>
+<div class="hrow" data-open-drawer><div class="hthumb"><img src="https://picsum.photos/seed/soti-b/88/88" alt=""/></div><div class="hbody"><div class="hmeta"><span class="tag">翻译</span><span class="htime">今天 17:15</span></div><p class="hprev">The experiment was repeated under controlled conditions.</p></div></div>
+</div>
+</section>
+<section class="tile reveal-on">
+<div class="tile-head"><h3>快捷管控</h3></div>
+<div class="toggles">
+<div class="trow"><span>2048</span><label class="sw"><input type="checkbox" checked/><i></i></label></div>
+<div class="trow"><span>视频</span><label class="sw"><input type="checkbox" checked/><i></i></label></div>
+<div class="trow"><span>音乐</span><label class="sw"><input type="checkbox"/><i></i></label></div>
+</div>
+<p class="note">工作日 19:00–21:00 禁止娱乐应用</p>
+<button type="button" class="btn btn--p btn--block" data-goto="policy">编辑时段策略</button>
+</section>
+</div>
+</section>
+
+<section id="panel-history" class="panel" hidden>
+<div class="toolbar reveal-on"><select class="select" disabled><option>全部模式</option></select><button type="button" class="btn btn--s">刷新</button></div>
+<div class="tile reveal-on">
+<div class="tile-head"><h3>搜题记录</h3><p style="margin:0;font-size:12px;color:var(--muted)">点击条目预览详情</p></div>
+<div class="hlist">
+<div class="hrow" data-open-drawer><div class="hthumb"><img src="https://picsum.photos/seed/soti-c/88/88" alt=""/></div><div class="hbody"><div class="hmeta"><span class="tag">讲解</span><span class="htime">昨天 20:03</span></div><p class="hprev">勾股定理：直角三角形两直角边平方和等于斜边平方。</p></div></div>
+<div class="hrow" data-open-drawer><div class="hthumb"><img src="https://picsum.photos/seed/soti-d/88/88" alt=""/></div><div class="hbody"><div class="hmeta"><span class="tag">批改</span><span class="htime">昨天 16:28</span></div><p class="hprev">第 3 题计算过程正确，最终答案写错单位。</p></div></div>
+</div>
+</div>
+</section>
+
+<section id="panel-chat" class="panel" hidden>
+<div class="tile chat reveal-on">
+<div class="tile-head"><h3>与孩子聊天</h3><span style="font-size:12px;color:var(--muted)">设备在线</span></div>
+<div class="chat-msgs">
+<div class="bub bub--c">18:20 · 妈妈，今天数学作业做完了</div>
+<div class="bub bub--p">18:22 · 很好，19 点后再玩 2048</div>
+<div class="bub bub--c">18:23 · 好的</div>
+</div>
+<div class="chat-send"><textarea rows="2" placeholder="输入消息…" disabled></textarea><button type="button" class="btn btn--p">发送</button></div>
+</div>
+</section>
+
+<section id="panel-album" class="panel" hidden>
+<div class="card stack reveal-on">
+<h3 style="margin:0 0 8px">传图到设备 SD 卡</h3>
+<p style="margin:0 0 16px;color:var(--muted);font-size:13px">支持 JPG/PNG/WebP；自动转 JPG 并缩小后同步。</p>
+<label class="fl"><span>选择照片</span><input type="file" disabled/></label>
+<label class="fl"><span>文件名（可选）</span><input type="text" placeholder="留空则用原文件名" disabled/></label>
+<button type="button" class="btn btn--p btn--block">上传到设备队列</button>
+</div>
+</section>
+
+<section id="panel-print" class="panel" hidden>
+<div class="stack">
+<div class="card reveal-on"><h3 style="margin:0 0 8px">远程打印 · 图片</h3><p style="margin:0 0 12px;color:var(--muted);font-size:13px">缩放到热敏纸宽度，设备确认后出纸。</p><label class="fl"><span>选择照片</span><input type="file" disabled/></label><button type="button" class="btn btn--p btn--block">加入打印队列</button></div>
+<div class="card reveal-on"><h3 style="margin:0 0 8px">远程打印 · 文字</h3><label class="fl"><span>正文</span><textarea rows="4" placeholder="最多 2000 字…" disabled></textarea></label><button type="button" class="btn btn--p btn--block">加入打印队列</button></div>
+</div>
+</section>
+
+<section id="panel-policy" class="panel" hidden>
+<div class="stack">
+<div class="card reveal-on"><h3 style="margin:0 0 8px">应用开关</h3><div class="toggles"><div class="trow"><span>2048 游戏</span><label class="sw"><input type="checkbox" checked/><i></i></label></div><div class="trow"><span>视频</span><label class="sw"><input type="checkbox" checked/><i></i></label></div><div class="trow"><span>音乐</span><label class="sw"><input type="checkbox"/><i></i></label></div></div></div>
+<div class="card reveal-on"><h3 style="margin:0 0 8px">学习时段</h3><div class="days"><button type="button" class="day on" data-day>一</button><button type="button" class="day on" data-day>二</button><button type="button" class="day on" data-day>三</button><button type="button" class="day on" data-day>四</button><button type="button" class="day on" data-day>五</button><button type="button" class="day" data-day>六</button><button type="button" class="day" data-day>日</button></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label class="fl"><span>开始</span><input type="time" value="19:00" disabled/></label><label class="fl"><span>结束</span><input type="time" value="21:00" disabled/></label></div>
+<button type="button" class="btn btn--p btn--block">保存策略</button></div>
+</div>
+</section>
+</main>
+</div>
+
+<aside id="drawer" class="drawer" hidden>
+<div class="drawer__bg"></div>
+<div class="drawer__sheet">
+<button type="button" class="drawer__x" id="drawer-close" aria-label="关闭">×</button>
+<h3>记录详情</h3>
+<img src="https://picsum.photos/seed/soti-a/480/240" alt="题目缩略图" style="width:100%;border-radius:8px;margin:12px 0"/>
+<pre class="drawer__pre">【解题】已知 f(x)=2x²-3x+1
+f(2)=3；与 x 轴交点 (1,0) 与 (1/2,0)</pre>
+</div>
+</aside>
+<script src="design-preview-mock.js"></script>
+</body>
+</html>

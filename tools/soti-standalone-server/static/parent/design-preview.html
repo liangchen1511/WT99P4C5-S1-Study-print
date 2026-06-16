@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<!-- 设计预览 v2.1：全屏 mock + 对齐修复，非生产 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="学习守护家长控制台 · 全界面视觉预览" />
+  <title>学习守护 · 视觉预览 v2.1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="design-preview.css" />
+</head>
+<body>
+<div id="preview-root">
+  <nav class="preview-island" aria-label="预览控制">
+    <span class="preview-island__tag">Preview</span>
+    <div class="preview-island__scenes">
+      <button type="button" class="scene-btn is-on" data-scene="login">登录</button>
+      <button type="button" class="scene-btn" data-scene="dashboard">总览</button>
+      <button type="button" class="scene-btn" data-scene="history">记录</button>
+      <button type="button" class="scene-btn" data-scene="policy">策略</button>
+      <button type="button" class="scene-btn" data-scene="chat">聊天</button>
+      <button type="button" class="scene-btn" data-scene="album">相册</button>
+      <button type="button" class="scene-btn" data-scene="print">打印</button>
+    </div>
+    <span class="preview-island__sep" aria-hidden="true"></span>
+    <button type="button" class="preview-theme" id="btn-theme" title="主题：浅色（点击切换）">◐</button>
+  </nav>
+
+  <section id="scene-login" class="scene scene-login is-on">
+    <div class="login-hero reveal is-in">
+      <p class="login-eyebrow">家长控制台</p>
+      <div class="hx-shell">
+        <div class="hx-core login-card">
+          <div class="login-brand">
+            <div class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 2 4 5v6c0 5.5 3.5 10 8 11 4.5-1 8-5.5 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h1>学习守护</h1>
+            <p class="muted">WT99 智能学习设备</p>
+          </div>
+          <form class="login-form">
+            <label><span>设备码</span><input type="text" value="WT99-DEMO-01" disabled /></label>
+            <label><span>家长密码</span><input type="password" value="demo-pass" disabled /></label>
+            <button type="button" class="btn btn--primary btn--block btn-premium">进入控制台<span class="btn-premium__icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+          </form>
+          <p class="login-footer muted">预览页 · 与 /parent/ 共用 styles.css</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="scene-app" class="scene app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 2 4 5v6c0 5.5 3.5 10 8 11 4.5-1 8-5.5 8-11V5l-8-3z"/></svg></span>
+        <span class="sidebar-brand-text">学习守护</span>
+      </div>
+      <nav class="nav" id="preview-nav">
+        <button type="button" class="nav-item nav-item--active" data-scene="dashboard"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>总览</button>
+        <button type="button" class="nav-item" data-scene="history"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>搜题记录</button>
+        <button type="button" class="nav-item" data-scene="policy"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg></span>管控策略</button>
+        <button type="button" class="nav-item" data-scene="chat"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span>亲子聊天</button>
+        <button type="button" class="nav-item" data-scene="album"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>相册传图</button>
+        <button type="button" class="nav-item" data-scene="print"><span class="nav-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>远程打印</button>
+      </nav>
+      <div class="sidebar-foot muted"><span>WT99-DEMO-01</span><span class="dot dot--online"></span><span>在线</span></div>
+    </aside>
+
+    <main class="main">
+      <div class="main-inner">
+        <header class="topbar reveal is-in">
+          <h2 id="page-title">总览</h2>
+          <div class="topbar-actions">
+            <span class="device-pill">WT99-DEMO-01</span>
+            <button type="button" class="btn btn--ghost theme-toggle" id="btn-theme-inner" title="主题">◐</button>
+            <button type="button" class="btn btn--ghost">退出</button>
+          </div>
+        </header>
+
+        <section id="panel-dashboard" class="panel panel--active">
+          <div class="bento-stats">
+            <article class="stat-card stat-card--hero reveal is-in"><div class="hx-shell"><div class="hx-core hx-pad--stat"><p class="stat-label">今日搜题</p><p class="stat-value">11</p></div></div></article>
+            <article class="stat-card reveal is-in reveal-d1"><div class="hx-shell"><div class="hx-core hx-pad--stat"><p class="stat-label">本周搜题</p><p class="stat-value">43</p></div></div></article>
+            <article class="stat-card stat-card--accent reveal is-in reveal-d2"><div class="hx-shell"><div class="hx-core hx-pad--stat"><p class="stat-label">当前策略</p><p class="stat-value stat-value--sm">工作日 19:00-21:00</p></div></div></article>
+          </div>
+          <div class="dash-grid">
+            <section class="card hx-shell reveal is-in reveal-d1">
+              <div class="hx-core hx-pad">
+                <div class="card-head"><h3>最近搜题</h3><button type="button" class="link-btn" data-goto="history">查看全部</button></div>
+                <ul class="history-list">
+                  <li class="history-item" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-a/104/104" alt="搜题缩略图" width="52" height="52" /></div><div class="history-body"><div class="history-meta"><span class="mode-badge">解题</span><span class="history-time">今天 18:42</span></div><p class="history-preview">已知 f(x)=2x²-3x+1，求 f(2) 及图像与 x 轴交点。</p></div></li>
+                  <li class="history-item" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-b/104/104" alt="搜题缩略图" width="52" height="52" /></div><div class="history-body"><div class="history-meta"><span class="mode-badge">翻译</span><span class="history-time">今天 17:15</span></div><p class="history-preview">The experiment was repeated under controlled conditions.</p></div></li>
+                </ul>
+              </div>
+            </section>
+            <section class="card hx-shell reveal is-in reveal-d2">
+              <div class="hx-core hx-pad--stack">
+                <div class="card-head"><h3>快捷管控</h3></div>
+                <div class="toggle-list">
+                  <div class="toggle-row"><span>2048 游戏</span><label class="switch"><input type="checkbox" checked /><span></span></label></div>
+                  <div class="toggle-row"><span>视频</span><label class="switch"><input type="checkbox" checked /><span></span></label></div>
+                  <div class="toggle-row"><span>音乐</span><label class="switch"><input type="checkbox" /><span></span></label></div>
+                </div>
+                <p class="rule-chip">工作日 19:00-21:00 禁止娱乐应用</p>
+                <div class="hx-foot"><button type="button" class="btn btn--primary btn--block btn-premium" data-goto="policy">编辑时段策略</button></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-history" class="panel" hidden>
+          <div class="toolbar reveal is-in"><select class="select" disabled><option>全部模式</option></select><button type="button" class="btn btn--ghost">刷新</button></div>
+          <p class="preview-drawer-hint">点击任意记录可预览右侧详情抽屉</p>
+          <ul class="history-list history-list--full">
+            <li class="history-item reveal is-in" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-c/104/104" alt="" width="52" height="52" /></div><div class="history-body"><div class="history-meta"><span class="mode-badge">讲解</span><span class="history-time">昨天 20:03</span></div><p class="history-preview">勾股定理：直角三角形两直角边平方和等于斜边平方。</p></div></li>
+            <li class="history-item reveal is-in reveal-d1" data-open-drawer><div class="history-thumb"><img src="https://picsum.photos/seed/soti-d/104/104" alt="" width="52" height="52" /></div><div class="history-body"><div class="history-meta"><span class="mode-badge">批改</span><span class="history-time">昨天 16:28</span></div><p class="history-preview">第 3 题计算过程正确，最终答案写错单位。</p></div></li>
+            <li class="history-item reveal is-in reveal-d2" data-open-drawer><div class="history-thumb history-thumb--empty">—</div><div class="history-body"><div class="history-meta"><span class="mode-badge">摘要</span><span class="history-time">6月7日</span></div><p class="history-preview">本章重点：一元二次方程求根公式与判别式。</p></div></li>
+          </ul>
+        </section>
+
+        <section id="panel-chat" class="panel" hidden>
+          <section class="card chat-card hx-shell reveal is-in">
+            <div class="hx-core hx-pad--chat">
+              <div class="chat-head"><h3>与孩子聊天</h3><span class="muted">设备在线</span></div>
+              <div class="chat-messages">
+                <div class="chat-row chat-row--child"><div class="chat-bubble chat-bubble--child"><span class="chat-bubble-meta">18:20</span>妈妈，今天数学作业做完了</div></div>
+                <div class="chat-row chat-row--parent"><div class="chat-bubble chat-bubble--parent"><span class="chat-bubble-meta">18:22</span>很好，19 点后再玩 2048</div></div>
+                <div class="chat-row chat-row--child"><div class="chat-bubble chat-bubble--child"><span class="chat-bubble-meta">18:23</span>好的</div></div>
+              </div>
+              <div class="chat-compose"><textarea rows="2" placeholder="输入消息，Enter 发送" disabled></textarea><button type="button" class="btn btn--primary btn-premium">发送</button></div>
+            </div>
+          </section>
+        </section>
+
+        <section id="panel-album" class="panel" hidden>
+          <section class="card hx-shell reveal is-in">
+            <div class="hx-core hx-pad">
+              <h3>传图到设备 SD 卡</h3>
+              <p class="muted">支持 JPG/PNG/WebP；服务器自动转 JPG 并缩小后同步到 SD 相册。</p>
+              <label class="form-block"><span class="form-label">选择照片</span><input type="file" disabled /></label>
+              <label class="form-block"><span class="form-label">文件名（可选）</span><input type="text" placeholder="留空则用原文件名" disabled /></label>
+              <button type="button" class="btn btn--primary btn--block btn-premium">上传到设备队列</button>
+            </div>
+          </section>
+        </section>
+
+        <section id="panel-print" class="panel" hidden>
+          <div class="panel-stack">
+            <section class="card hx-shell reveal is-in">
+              <div class="hx-core hx-pad">
+                <h3>远程打印 · 图片</h3>
+                <p class="muted">缩放到热敏纸宽度，设备「打印」App 内确认后出纸。</p>
+                <label class="form-block"><span class="form-label">选择照片</span><input type="file" disabled /></label>
+                <label class="checkbox-row"><input type="checkbox" checked disabled /><span>热敏对比增强（推荐）</span></label>
+                <button type="button" class="btn btn--primary btn--block btn-premium">加入打印队列</button>
+              </div>
+            </section>
+            <section class="card hx-shell reveal is-in reveal-d1">
+              <div class="hx-core hx-pad">
+                <h3>远程打印 · 文字</h3>
+                <p class="muted">最多 2000 字；设备确认后通过热敏机打印。</p>
+                <label class="form-block"><span class="form-label">正文</span><textarea rows="5" placeholder="输入要打印的文字…" disabled></textarea></label>
+                <button type="button" class="btn btn--primary btn--block btn-premium">加入打印队列</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-policy" class="panel" hidden>
+          <div class="panel-stack">
+            <section class="card hx-shell reveal is-in">
+              <div class="hx-core hx-pad">
+                <h3>应用开关</h3>
+                <p class="muted">开启=允许使用；关闭=始终禁止</p>
+                <div class="toggle-list">
+                  <div class="toggle-row"><span>2048 游戏</span><label class="switch"><input type="checkbox" checked /><span></span></label></div>
+                  <div class="toggle-row"><span>视频</span><label class="switch"><input type="checkbox" checked /><span></span></label></div>
+                  <div class="toggle-row"><span>音乐</span><label class="switch"><input type="checkbox" /><span></span></label></div>
+                  <div class="toggle-row"><span>相机</span><label class="switch"><input type="checkbox" checked /><span></span></label></div>
+                </div>
+              </div>
+            </section>
+            <section class="card hx-shell reveal is-in reveal-d1">
+              <div class="hx-core hx-pad">
+                <div class="policy-section-head"><h3>学习时段</h3><label class="switch switch--inline"><input type="checkbox" checked /><span></span></label></div>
+                <p class="muted">在选定星期与时间段内，仅禁止勾选的应用</p>
+                <div class="form-block"><span class="form-label">星期</span>
+                  <div class="day-chips"><button type="button" class="day-chip day-chip--on">一</button><button type="button" class="day-chip day-chip--on">二</button><button type="button" class="day-chip day-chip--on">三</button><button type="button" class="day-chip day-chip--on">四</button><button type="button" class="day-chip day-chip--on">五</button><button type="button" class="day-chip">六</button><button type="button" class="day-chip">日</button></div>
+                </div>
+                <div class="form-block form-block--row">
+                  <label><span class="form-label">开始</span><input type="time" class="input-time" value="19:00" disabled /></label>
+                  <label><span class="form-label">结束</span><input type="time" class="input-time" value="21:00" disabled /></label>
+                </div>
+                <div class="check-grid">
+                  <label class="check-pill check-pill--on"><input type="checkbox" checked disabled /> 2048</label>
+                  <label class="check-pill check-pill--on"><input type="checkbox" checked disabled /> 视频</label>
+                  <label class="check-pill check-pill--on"><input type="checkbox" checked disabled /> 音乐</label>
+                </div>
+                <div class="policy-actions"><button type="button" class="btn btn--primary btn-premium">保存策略</button></div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <aside id="drawer" class="drawer" hidden>
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <div class="drawer-panel">
+      <button type="button" class="drawer-close" id="drawer-close" aria-label="关闭">×</button>
+      <h3>记录详情</h3>
+      <img class="drawer-thumb" src="https://picsum.photos/seed/soti-a/480/240" alt="题目缩略图" />
+      <pre class="drawer-body">【解题】
+已知 f(x)=2x²-3x+1
+
+1. f(2)=2×4-6+1=3
+2. 令 f(x)=0，解得 x=1 或 x=1/2
+3. 与 x 轴交点为 (1,0) 与 (1/2,0)</pre>
+    </div>
+  </aside>
+</div>
+<script>
+(function () {
+  "use strict";
+  var THEMES = ["light", "dark", "black"];
+  var LABELS = { light: "浅色", dark: "深色", black: "纯黑" };
+  var PANELS = ["dashboard", "history", "chat", "policy", "album", "print"];
+  var TITLES = { dashboard: "总览", history: "搜题记录", chat: "亲子聊天", policy: "管控策略", album: "相册传图", print: "远程打印" };
+
+  function $(s) { return document.querySelector(s); }
+  function getTheme() {
+    var t = document.documentElement.dataset.theme;
+    return THEMES.indexOf(t) >= 0 ? t : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  }
+  function setThemeBtns() {
+    var label = "主题：" + LABELS[getTheme()] + "（点击切换）";
+    ["btn-theme", "btn-theme-inner"].forEach(function (id) { var b = document.getElementById(id); if (b) b.title = label; });
+  }
+  function cycleTheme() {
+    var next = THEMES[(THEMES.indexOf(getTheme()) + 1) % THEMES.length];
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("parent_theme", next); } catch (e) {}
+    setThemeBtns();
+  }
+  try { var s = localStorage.getItem("parent_theme"); if (THEMES.indexOf(s) >= 0) document.documentElement.dataset.theme = s; } catch (e) {}
+  setThemeBtns();
+  $("#btn-theme").addEventListener("click", cycleTheme);
+  var ti = $("#btn-theme-inner"); if (ti) ti.addEventListener("click", cycleTheme);
+
+  function showPanel(name) {
+    if (PANELS.indexOf(name) < 0) return;
+    document.querySelectorAll("#preview-nav .nav-item").forEach(function (n) {
+      n.classList.toggle("nav-item--active", n.dataset.scene === name);
+    });
+    PANELS.forEach(function (p) {
+      var el = document.getElementById("panel-" + p);
+      if (!el) return;
+      var on = p === name;
+      el.classList.toggle("panel--active", on);
+      el.hidden = !on;
+    });
+    $("#page-title").textContent = TITLES[name] || name;
+    document.querySelectorAll(".scene-btn").forEach(function (b) {
+      if (b.dataset.scene !== "login") b.classList.toggle("is-on", b.dataset.scene === name);
+    });
+  }
+
+  function showScene(name) {
+    document.querySelectorAll(".scene-btn").forEach(function (b) {
+      b.classList.toggle("is-on", b.dataset.scene === name);
+    });
+    if (name === "login") {
+      $("#scene-login").classList.add("is-on");
+      $("#scene-app").classList.remove("is-on");
+      closeDrawer();
+      return;
+    }
+    $("#scene-login").classList.remove("is-on");
+    $("#scene-app").classList.add("is-on");
+    showPanel(name);
+  }
+
+  document.querySelectorAll(".scene-btn").forEach(function (b) {
+    b.addEventListener("click", function () { showScene(b.dataset.scene); });
+  });
+  document.querySelectorAll("#preview-nav .nav-item").forEach(function (b) {
+    b.addEventListener("click", function () { showScene(b.dataset.scene); });
+  });
+  document.querySelectorAll("[data-goto]").forEach(function (b) {
+    b.addEventListener("click", function () { showScene(b.dataset.goto); });
+  });
+
+  var drawer = $("#drawer");
+  function openDrawer() { drawer.hidden = false; drawer.classList.add("drawer--open"); }
+  function closeDrawer() { drawer.classList.remove("drawer--open"); drawer.hidden = true; }
+  document.querySelectorAll("[data-open-drawer]").forEach(function (el) {
+    el.addEventListener("click", openDrawer);
+  });
+  $("#drawer-close").addEventListener("click", closeDrawer);
+  $("#drawer-backdrop").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); } });
+    }, { threshold: 0.08 });
+    document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll(".reveal").forEach(function (el) { el.classList.add("is-in"); });
+  }
+})();
+</script>
+</body>
+</html>
