@@ -26,7 +26,7 @@ endforeach()
 idf_component_register(
     SRCS ${APPS_C_SRCS} ${APPS_CPP_SRCS}
     INCLUDE_DIRS ${APPS_DIR}
-    REQUIRES lvgl__lvgl esp_event esp_wifi esp_netif nvs_flash esp_driver_jpeg esp_mm esp-brookesia bsp_extra wt99p4c5_s1_board esp_video espressif__esp_lcd_touch_gt911 espressif__esp_jpeg lv_font_ui_zh esp_http_client json usb_escpos_printer parent_policy power_manager parent_album_sync parent_print_sync esp_timer)
+    REQUIRES lvgl__lvgl esp_event esp_wifi esp_netif nvs_flash esp_driver_jpeg esp_mm esp-brookesia bsp_extra wt99p4c5_s1_board esp_video espressif__esp_lcd_touch_gt911 espressif__esp_jpeg lv_font_ui_zh esp_http_client json usb_escpos_printer parent_policy power_manager parent_album_sync parent_print_sync esp_timer xiaozhi_service)
 
 target_compile_options(
     ${COMPONENT_LIB}

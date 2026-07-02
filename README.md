@@ -22,7 +22,7 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 - 💾 **Storage** — SPIFFS + SD card
 - 🌐 **Network** — Wi‑Fi (**2.4 GHz only** via C5) + Ethernet
 
-> **Removed in this branch** (not built): face/pedestrian detection, Xiaozhi voice, dual-firmware switch. See `docs/DESKTOP_BRANCH.md`.
+> **Removed in this branch** (not built): face/pedestrian detection, dual-firmware Xiaozhi switch. **In-framework AI chat** via `esp_xiaozhi` is included. See `docs/DESKTOP_BRANCH.md`.
 
 ## Desktop Apps
 
@@ -38,6 +38,24 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 | **PhotoAlbum** | SD JPEG preview; **SoTi** / **Sync** / delete |
 | **Print** | Thermal wiring & menuconfig notes (not the print entry point) |
 | **ParentChat** | Parent-station messaging; device **Pinyin IME** (26-key + candidate bar) |
+| **AI助手** | xiaozhi.me 语音对话（按住说话；WiFi 在设置中配置） |
+
+## AI 助手（小智）
+
+桌面 **AI助手** App 使用乐鑫 `esp_xiaozhi` 对接 [xiaozhi.me](https://xiaozhi.me) 平台（流式 ASR → LLM → TTS）。
+
+### 首次使用
+
+1. **设置** App 连接 2.4 GHz WiFi（设备不在 App 内配网）。
+2. 打开 **AI助手**；若未激活，屏幕显示设备 ID 与激活码。
+3. 浏览器打开 [xiaozhi.me](https://xiaozhi.me) 注册并输入激活码。
+4. 激活后重新进入 App，状态为「已连接，按住说话」。
+
+### 对话
+
+- **按住** 底部「按住说话」→ 松手后等待 AI 语音与文字回复。
+- 若长时间停在「思考中」，串口查看 `xz_svc` 的 `audio sent` / `send_audio_data` 日志。
+- 退出 App 后其它功能（搜题、家长聊等）不受影响。
 
 ## SoTi Application
 

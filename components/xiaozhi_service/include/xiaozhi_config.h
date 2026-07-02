@@ -1,0 +1,21 @@
+#pragma once
+#define XZ_SR 16000
+#define XZ_FRAME_MS 60
+#define XZ_FRAME_SAMPLES ((XZ_SR * XZ_FRAME_MS) / 1000)
+#define XZ_PCM_BYTES (XZ_FRAME_SAMPLES * sizeof(int16_t))
+#define XZ_ST_PCM_BYTES (XZ_PCM_BYTES * 2)
+#define XZ_AUDIO_CH 1
+#define XZ_AUDIO_FMT "opus"
+#define XZ_REC_TASK_STACK 32768
+#define XZ_PLAY_TASK_STACK 32768
+#define XZ_PLAY_Q_DEPTH 16
+#define XZ_OPUS_PKT_MAX 512
+#define XZ_INIT_TASK_STACK 12288
+#define XZ_WATCH_TASK_STACK 3072
+#define XZ_PLAY_PRIO 5
+#define XZ_REC_PRIO 6
+#define XZ_INIT_PRIO 5
+#define XZ_WATCH_PRIO 4
+#define XZ_BG_WAIT_MS 3000
+#define XZ_REPLY_TIMEOUT_MS 12000
+#define XZ_START_SETTLE_MS 3000

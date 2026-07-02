@@ -201,13 +201,14 @@ extern "C" void app_main(void)
 
     boot_splash_show(lv_scr_act());
     boot_splash_run();
-    boot_splash_dismiss();
 
     if (xSemaphoreTake(s_deferred_init_done, pdMS_TO_TICKS(15000)) != pdTRUE) {
         ESP_LOGW(TAG, "Deferred init still running after splash");
     }
     vSemaphoreDelete(s_deferred_init_done);
     s_deferred_init_done = nullptr;
+
+    boot_splash_dismiss();
 
     ESP_LOGI(TAG, "Display ESP-Brookesia phone demo");
 
@@ -269,6 +270,10 @@ extern "C" void app_main(void)
     ParentChat *parent_chat = new ParentChat();
     assert(parent_chat != nullptr && "Failed to create parent_chat");
     assert((phone->installApp(parent_chat) >= 0) && "Failed to begin parent_chat");
+
+    AiChat *ai_chat = new AiChat();
+    assert(ai_chat != nullptr && "Failed to create ai_chat");
+    assert((phone->installApp(ai_chat) >= 0) && "Failed to begin ai_chat");
 
     bsp_display_unlock();
 

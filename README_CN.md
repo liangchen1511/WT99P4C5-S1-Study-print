@@ -22,7 +22,7 @@
 - 💾 **存储** — SPIFFS + SD 卡
 - 🌐 **网络** — Wi‑Fi（**仅 2.4GHz**，经 C5）+ 以太网
 
-> **已移除（本分支不编译）**：人脸/行人检测、小智语音、双固件切换。详见 `docs/DESKTOP_BRANCH.md`。
+> **已移除（本分支不编译）**：人脸/行人检测、双固件小智切换。**桌面内 AI 助手**（`esp_xiaozhi` + xiaozhi.me）已集成。详见 `docs/DESKTOP_BRANCH.md`。
 
 ## 桌面 App 一览
 
@@ -38,6 +38,23 @@
 | **PhotoAlbum** | SD  JPEG 预览；**搜题** / **同步** / 删除 |
 | **Print** | 热敏机接线与 menuconfig 说明（非打印入口） |
 | **ParentChat** | 与家长站消息；设备端 **26 键拼音** 输入中文（候选栏选字） |
+| **AI助手** | xiaozhi.me 语音对话（按住说话；WiFi 在设置中配置） |
+
+## AI 助手（小智）
+
+桌面 **AI助手** 使用乐鑫 `esp_xiaozhi` 对接 [xiaozhi.me](https://xiaozhi.me)（流式 ASR → LLM → TTS）。
+
+### 首次使用
+
+1. 在 **设置** 中连接 2.4 GHz WiFi（App 内不配网）。
+2. 打开 **AI助手**；未激活时屏幕显示设备 ID 与激活码。
+3. 浏览器打开 [xiaozhi.me](https://xiaozhi.me) 注册并输入激活码。
+4. 激活后重新进入 App，显示「已连接，按住说话」。
+
+### 对话
+
+- **按住** 底部「按住说话」→ 松手后听 AI 语音并看屏幕文字。
+- 退出 App 后搜题、家长聊等功能正常。
 
 ## 搜题 (SoTi) 应用
 

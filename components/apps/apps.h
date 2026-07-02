@@ -10,3 +10,4 @@
 #include "SoTi/SoTi.hpp"
 #include "print/Print.hpp"
 #include "parent_chat/ParentChat.hpp"
+#include "AiChat/AiChat.hpp"
