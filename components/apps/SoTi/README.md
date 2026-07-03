@@ -33,6 +33,7 @@ WT99P4C5-S1 上拍照 → JPEG 上传 → 豆包视觉识题 → 屏幕显示答
 - 生成：
 
 ```bash
+python tools/gen_symbols_hans_common.py   # 重建 GB2312 一级 3755 字（可选）
 python tools/gen_lv_font_ui_zh.py
 ```
 
