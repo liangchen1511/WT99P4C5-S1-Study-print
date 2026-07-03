@@ -80,6 +80,12 @@ static void format_msg_time(double ts, char *buf, size_t cap)
     snprintf(buf, cap, "%d月%d日 %02d:%02d", tm_out.tm_mon + 1, tm_out.tm_mday, tm_out.tm_hour, tm_out.tm_min);
 }
 
+static void deferred_scroll_bottom(void *p)
+{
+    ParentChat *app = static_cast<ParentChat *>(p);
+    if (app) app->scrollToBottom(false);
+}
+
 static void ui_apply_msgs_async(void *p)
 {
     ParentChatUiOp *op = static_cast<ParentChatUiOp *>(p);
@@ -181,15 +187,10 @@ void ParentChat::appendMessage(int msg_id, const char *sender, const char *body,
 
 void ParentChat::scrollToBottom(bool anim)
 {
-    if (_scroll == nullptr || _msg_col == nullptr) {
-        return;
-    }
+    if (!_scroll || !_msg_col) return;
+    lv_obj_update_layout(_scroll);
     lv_obj_update_layout(_msg_col);
-    const uint32_t n = lv_obj_get_child_cnt(_msg_col);
-    if (n == 0) {
-        return;
-    }
-    lv_obj_scroll_to_view(lv_obj_get_child(_msg_col, n - 1), anim ? LV_ANIM_ON : LV_ANIM_OFF);
+    lv_obj_scroll_to_y(_scroll, LV_COORD_MAX, anim ? LV_ANIM_ON : LV_ANIM_OFF);
 }
 
 void ParentChat::applyServerMessages(const std::vector<ParentChatMsg> &msgs, bool initial)
@@ -211,6 +212,7 @@ void ParentChat::applyServerMessages(const std::vector<ParentChatMsg> &msgs, boo
     if (batch) {
         _suppress_msg_scroll = false;
         scrollToBottom(false);
+        lv_async_call(deferred_scroll_bottom, this);
     } else if (!msgs.empty()) {
         scrollToBottom(true);
     }

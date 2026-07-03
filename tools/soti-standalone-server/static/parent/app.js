@@ -662,6 +662,14 @@
     runPanelMotion(name);
   }
 
+  function scrollChatToBottom() {
+    const b = $("#chat-messages");
+    if (!b) return;
+    const s = () => { b.scrollTop = b.scrollHeight; };
+    s();
+    requestAnimationFrame(() => requestAnimationFrame(s));
+  }
+
   function formatChatTime(ts) {
     const d = new Date(ts * 1000);
     return `${d.getMonth() + 1}月${d.getDate()}日 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
@@ -687,7 +695,7 @@
       row.appendChild(bubble);
       box.appendChild(row);
     });
-    box.scrollTop = box.scrollHeight;
+    scrollChatToBottom();
   }
 
   function updateChatBadge(unread) {
