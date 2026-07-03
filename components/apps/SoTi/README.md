@@ -29,7 +29,8 @@ WT99P4C5-S1 上拍照 → JPEG 上传 → 豆包视觉识题 → 屏幕显示答
 ## 字库
 
 - 组件：`components/lv_font_ui_zh/`
-- 配置：`symbols.txt`（UI 文案）、`symbols_math.txt`（数学符号）、`symbols_extra.txt`（AI 回复补充字）、`symbols_hans_common.txt`（常用汉字）
+- 配置：`symbols.txt`（UI 文案）、`symbols_math.txt`（数学符号，含 **≈** 约等于）、`symbols_extra.txt`（AI 回复补充字）、`symbols_hans_common.txt`（常用汉字）
+- 数学符号需 `components/lv_font_ui_zh/noto_math.ttf`（首次生成脚本可自动下载）
 - 生成：
 
 ```bash

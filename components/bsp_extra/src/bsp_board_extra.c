@@ -186,6 +186,10 @@ esp_err_t bsp_extra_codec_set_fs(uint32_t rate, uint32_t bits_cfg, i2s_slot_mode
 
     if (play_dev_handle) {
         ret |= esp_codec_dev_open(play_dev_handle, &fs);
+        if (ret == ESP_OK) {
+            esp_codec_dev_set_out_vol(play_dev_handle, _vloume_intensity);
+            esp_codec_dev_set_out_mute(play_dev_handle, false);
+        }
     }
     if (record_dev_handle) {
         ret |= esp_codec_dev_open(record_dev_handle, &fs);
@@ -247,6 +251,7 @@ esp_err_t bsp_extra_codec_init()
     assert((record_dev_handle) && "record_dev_handle not initialized");
 
     bsp_extra_codec_set_fs(CODEC_DEFAULT_SAMPLE_RATE, CODEC_DEFAULT_BIT_WIDTH, CODEC_DEFAULT_CHANNEL);
+    bsp_extra_codec_volume_set(CODEC_DEFAULT_VOLUME, NULL);
 
     _is_audio_init = true;
 

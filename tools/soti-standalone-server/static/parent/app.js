@@ -664,7 +664,7 @@
 
   function formatChatTime(ts) {
     const d = new Date(ts * 1000);
-    return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
   }
 
   function renderChatMessages(items, replace) {

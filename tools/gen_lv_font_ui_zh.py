@@ -4,68 +4,70 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.request
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FONT_DIR = os.path.join(ROOT, "components", "lv_font_ui_zh")
 WOFF = os.path.join(FONT_DIR, "noto.woff")
+MATH_TTF = os.path.join(FONT_DIR, "noto_math.ttf")
+MATH_URL = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansMath/NotoSansMath-Regular.ttf"
 SYMBOL_FILES = (
     "symbols.txt",
     "symbols_math.txt",
     "symbols_extra.txt",
     "symbols_hans_common.txt",
 )
+MATH_ONLY = ("symbols_math.txt",)
 
 
-def load_symbols() -> str:
-  """Merge symbol files; dedupe Han while keeping order. ASCII comes from --range 0x20-0x7F."""
+def _dedupe_non_ascii(text: str) -> str:
+  seen: set[str] = set()
+  out: list[str] = []
+  for ch in text:
+    if ord(ch) < 0x80 or ch in seen:
+      continue
+    seen.add(ch)
+    out.append(ch)
+  return "".join(out)
+
+
+def _read_symbol_files(names: tuple[str, ...]) -> str:
   raw = []
-  for name in SYMBOL_FILES:
+  for name in names:
     path = os.path.join(FONT_DIR, name)
     if not os.path.isfile(path):
       if name == "symbols.txt":
         print("Missing required:", path, file=sys.stderr)
         sys.exit(1)
       continue
-    lines = []
     for line in open(path, encoding="utf-8"):
       s = line.strip()
       if not s or s.startswith("#"):
         continue
-      lines.append(s)
-    raw.append("".join(lines))
-  text = "".join(raw)
-  seen: set[str] = set()
-  out: list[str] = []
-  for ch in text:
-    if ord(ch) < 0x80:
-      continue
-    if ch not in seen:
-      seen.add(ch)
-      out.append(ch)
-  merged = "".join(out)
-  print("Han glyphs in font subset:", len(out), file=sys.stderr)
-  return merged
+      raw.append(s)
+  return _dedupe_non_ascii("".join(raw))
+
+
+def ensure_math_font() -> None:
+  if os.path.isfile(MATH_TTF):
+    return
+  print("download", MATH_URL, file=sys.stderr)
+  urllib.request.urlretrieve(MATH_URL, MATH_TTF)
 
 
 def main() -> int:
   if not os.path.isfile(WOFF):
     print("Missing font:", WOFF, file=sys.stderr)
     return 1
-  symbols = load_symbols()
+  ensure_math_font()
+  symbols = _read_symbol_files(SYMBOL_FILES)
+  math_symbols = _read_symbol_files(MATH_ONLY)
+  print("Han glyphs in font subset:", len(symbols), file=sys.stderr)
   os.chdir(FONT_DIR)
   common = [
-    "--font",
-    WOFF,
-    "-r",
-    "0x20-0x7F",
-    "--symbols",
-    symbols,
-    "--bpp",
-    "4",
-    "--format",
-    "lvgl",
-    "--lv-include",
-    "lvgl.h",
+    "--font", WOFF, "-r", "0x20-0x7F", "--symbols", symbols,
+    "--font", MATH_TTF, "--symbols", math_symbols,
+    "--bpp", "4", "--format", "lvgl", "--lv-include", "lvgl.h",
   ]
   npx = shutil.which("npx") or shutil.which("npx.cmd")
   if not npx:

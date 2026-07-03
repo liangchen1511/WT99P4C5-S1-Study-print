@@ -101,21 +101,36 @@ static esp_mcp_t *mk_mcp(void)
     esp_mcp_add_tool(m, t2);
     return m;
 }
+static void xz_audio_out_ready(void)
+{
+    bsp_extra_codec_mute_set(false);
+    int v = bsp_extra_codec_volume_get();
+    bsp_extra_codec_volume_set(v, NULL);
+}
 static void play_task(void *)
 {
     static int16_t st[XZ_FRAME_SAMPLES * 2];
     xz_play_pkt_t pkt;
+    unsigned dec_err = 0, wr_err = 0, played = 0;
     ESP_LOGW(TAG, "play task started stack=%u", (unsigned)XZ_PLAY_TASK_STACK);
     while (s_run) {
         if (xQueueReceive(s_play_q, &pkt, pdMS_TO_TICKS(50)) != pdTRUE) continue;
         if (!s_dec || !pkt.len) continue;
         std::vector<uint8_t> op(pkt.d, pkt.d + pkt.len);
         std::vector<int16_t> pcm;
-        if (!s_dec->Decode(std::move(op), pcm) || pcm.empty()) continue;
+        if (!s_dec->Decode(std::move(op), pcm) || pcm.empty()) {
+            if ((++dec_err % 20) == 1) ESP_LOGW(TAG, "opus decode fail len=%u", (unsigned)pkt.len);
+            continue;
+        }
         size_t n = pcm.size() > XZ_FRAME_SAMPLES ? XZ_FRAME_SAMPLES : pcm.size();
         for (size_t i = 0; i < n; i++) { st[i * 2] = pcm[i]; st[i * 2 + 1] = pcm[i]; }
         size_t w = 0;
-        bsp_extra_i2s_write(st, n * 2 * sizeof(int16_t), &w, 100);
+        esp_err_t we = bsp_extra_i2s_write(st, n * 2 * sizeof(int16_t), &w, 100);
+        if (we != ESP_OK) {
+            if ((++wr_err % 20) == 1) ESP_LOGW(TAG, "i2s_write fail %s w=%u", esp_err_to_name(we), (unsigned)w);
+            continue;
+        }
+        if ((++played % 30) == 1) ESP_LOGW(TAG, "tts play frames=%u pcm=%u", played, (unsigned)n);
     }
     s_play_task = nullptr;
     vTaskDeleteWithCaps(NULL);
@@ -124,7 +139,10 @@ static void on_audio(const uint8_t *d, int len, void *)
 {
     if (!d || len <= 0 || len > XZ_OPUS_PKT_MAX || !s_play_q) return;
     xz_play_pkt_t p{}; p.len = (uint16_t)len; memcpy(p.d, d, len);
-    xQueueSend(s_play_q, &p, 0);
+    static uint32_t rx, drop;
+    if ((++rx % 30) == 1) ESP_LOGW(TAG, "tts rx len=%d q=%u", len, (unsigned)uxQueueMessagesWaiting(s_play_q));
+    if (xQueueSend(s_play_q, &p, pdMS_TO_TICKS(30)) != pdTRUE && (++drop % 10) == 1)
+        ESP_LOGW(TAG, "play q full drop=%u", (unsigned)drop);
 }
 static void on_evt(esp_xiaozhi_chat_event_t ev, void *data, void *)
 {
@@ -148,7 +166,12 @@ static void on_evt(esp_xiaozhi_chat_event_t ev, void *data, void *)
         if (!ts) break;
         ESP_LOGW(TAG, "tts state=%d text_len=%u", (int)ts->state, (unsigned)(ts->text ? strlen(ts->text) : 0));
         s_wait_reply = false;
-        if (ts->state == ESP_XIAOZHI_CHAT_TTS_STATE_START) emit(XZ_SVC_SPEAKING, "播放中…", nullptr, false);
+        if (ts->state == ESP_XIAOZHI_CHAT_TTS_STATE_START) {
+            if (s_dec) s_dec->ResetState();
+            if (s_play_q) xQueueReset(s_play_q);
+            xz_audio_out_ready();
+            emit(XZ_SVC_SPEAKING, "播放中…", nullptr, false);
+        }
         else if (ts->state == ESP_XIAOZHI_CHAT_TTS_STATE_STOP) emit(XZ_SVC_READY, "待命，按住说话", nullptr, false);
         break;
     }
@@ -302,6 +325,7 @@ static void init_task(void *)
     }
     heap_log("mk_opus");
     esp_xiaozhi_chat_config_t cfg = ESP_XIAOZHI_CHAT_DEFAULT_CONFIG();
+    cfg.audio_type = ESP_XIAOZHI_CHAT_AUDIO_TYPE_OPUS;
     cfg.audio_callback = on_audio;
     cfg.event_callback = on_evt;
     cfg.mcp_engine = mcp;
@@ -337,7 +361,10 @@ static void init_task(void *)
     xSemaphoreGive(s_mtx);
     err = bsp_extra_codec_set_fs(XZ_SR, CODEC_DEFAULT_BIT_WIDTH, I2S_SLOT_MODE_STEREO);
     ESP_LOGW(TAG, "codec set fs for xiaozhi ret=%s", esp_err_to_name(err));
-    if (err == ESP_OK) s_play_fs = true;
+    if (err == ESP_OK) {
+        s_play_fs = true;
+        xz_audio_out_ready();
+    }
     if (err != ESP_OK) {
         xSemaphoreTake(s_mtx, portMAX_DELAY);
         if (s_chat) {

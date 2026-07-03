@@ -77,7 +77,7 @@ static void format_msg_time(double ts, char *buf, size_t cap)
     if (localtime_r(&t, &tm_out) == nullptr) {
         return;
     }
-    snprintf(buf, cap, "%02d:%02d", tm_out.tm_hour, tm_out.tm_min);
+    snprintf(buf, cap, "%d月%d日 %02d:%02d", tm_out.tm_mon + 1, tm_out.tm_mday, tm_out.tm_hour, tm_out.tm_min);
 }
 
 static void ui_apply_msgs_async(void *p)
@@ -162,7 +162,7 @@ void ParentChat::appendMessage(int msg_id, const char *sender, const char *body,
     lv_label_set_long_mode(txt, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(txt, lv_pct(100));
 
-    char tbuf[16];
+    char tbuf[24];
     format_msg_time(created_at, tbuf, sizeof(tbuf));
     if (tbuf[0] != '\0') {
         lv_obj_t *time_lbl = lv_label_create(bubble);
