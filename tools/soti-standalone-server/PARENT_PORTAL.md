@@ -91,7 +91,8 @@ bash /tmp/soti-ecs/deploy-parent-to-ecs.sh
   - **PlayStation**：`/parent/design-preview-ps.html` — `#0070d1` 蓝带登录、顶栏 tab 导航
   - **Raycast**：`/parent/design-preview-raycast.html` — 命令面板侧栏、`⌘K` 提示、红色 hero 条
 - **双主题**：默认跟随系统 `prefers-color-scheme`（映射为暖色 **深色**）；登录后点顶栏 **◐** 循环切换 **浅色 → 深色 → 纯黑**（写入 `localStorage` 键 `parent_theme`，取值 `light` / `dark` / `black`）
-- **主色**：暖琥珀（亲子控制台），侧栏 SVG 图标；手机宽度下导航收为底部 tab 栏
+- **主色**：暖琥珀（亲子控制台），侧栏 SVG 图标
+- **手机布局**（宽度 ≤768px，电脑端不变）：底部 Tab 栏（总览/记录/策略/聊天/相册/打印）替代三条杠菜单；顶栏紧凑；Bento 统计 2 列；聊天区 flex 满屏；记录抽屉底滑全宽；支持 `safe-area-inset`
 
 ## 功能
 

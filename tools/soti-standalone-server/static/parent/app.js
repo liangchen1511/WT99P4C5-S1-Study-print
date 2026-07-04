@@ -617,6 +617,8 @@
       login.classList.remove("view--active");
       login.hidden = true;
       shell.hidden = false;
+      const dock = $("#nav-dock");
+      if (dock) dock.hidden = false;
       $("#sidebar-device").textContent = state.deviceId;
       $("#top-device-pill").textContent = state.deviceId;
     });
@@ -630,6 +632,8 @@
     localStorage.removeItem(STORAGE_TOKEN);
     vt(() => {
       $("#view-app").hidden = true;
+      const dock = $("#nav-dock");
+      if (dock) dock.hidden = true;
       const login = $("#view-login");
       login.hidden = false;
       login.classList.add("view--active");
@@ -699,9 +703,8 @@
   }
 
   function updateChatBadge(unread) {
-    const badge = $("#nav-chat-badge");
     const n = unread && unread.parent_unread ? unread.parent_unread : 0;
-    if (badge) badge.hidden = n <= 0;
+    document.querySelectorAll(".nav-badge").forEach((badge) => { badge.hidden = n <= 0; });
   }
 
   async function chatMarkRead(upToId) {
