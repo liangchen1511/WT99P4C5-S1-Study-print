@@ -441,9 +441,9 @@ static esp_err_t print_text_job(const parent_print_job_t &job)
         cJSON_Delete(root);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    const char *to_print = txt->valuestring;
+    std::string to_print = txt->valuestring;
     cJSON_Delete(root);
-    esp_err_t err = escpos_printer_print_utf8(to_print);
+    esp_err_t err = escpos_printer_print_utf8(to_print.c_str());
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "text print err=%s", esp_err_to_name(err));
     }

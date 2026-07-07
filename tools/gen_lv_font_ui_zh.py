@@ -11,6 +11,9 @@ FONT_DIR = os.path.join(ROOT, "components", "lv_font_ui_zh")
 WOFF = os.path.join(FONT_DIR, "noto.woff")
 MATH_TTF = os.path.join(FONT_DIR, "noto_math.ttf")
 MATH_URL = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansMath/NotoSansMath-Regular.ttf"
+PUNCT_TTF = os.path.join(FONT_DIR, "noto_sans.ttf")
+PUNCT_URL = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
+PUNCT_SYMBOLS = "…—·"  # CJK woff 常缺，用 Noto Sans 补
 SYMBOL_FILES = (
     "symbols.txt",
     "symbols_math.txt",
@@ -48,11 +51,19 @@ def _read_symbol_files(names: tuple[str, ...]) -> str:
   return _dedupe_non_ascii("".join(raw))
 
 
-def ensure_math_font() -> None:
-  if os.path.isfile(MATH_TTF):
+def ensure_ttf(path: str, url: str) -> None:
+  if os.path.isfile(path):
     return
-  print("download", MATH_URL, file=sys.stderr)
-  urllib.request.urlretrieve(MATH_URL, MATH_TTF)
+  print("download", url, file=sys.stderr)
+  urllib.request.urlretrieve(url, path)
+
+
+def ensure_math_font() -> None:
+  ensure_ttf(MATH_TTF, MATH_URL)
+
+
+def ensure_punct_font() -> None:
+  ensure_ttf(PUNCT_TTF, PUNCT_URL)
 
 
 def main() -> int:
@@ -60,12 +71,14 @@ def main() -> int:
     print("Missing font:", WOFF, file=sys.stderr)
     return 1
   ensure_math_font()
+  ensure_punct_font()
   symbols = _read_symbol_files(SYMBOL_FILES)
   math_symbols = _read_symbol_files(MATH_ONLY)
   print("Han glyphs in font subset:", len(symbols), file=sys.stderr)
   os.chdir(FONT_DIR)
   common = [
     "--font", WOFF, "-r", "0x20-0x7F", "--symbols", symbols,
+    "--font", PUNCT_TTF, "--symbols", PUNCT_SYMBOLS,
     "--font", MATH_TTF, "--symbols", math_symbols,
     "--bpp", "4", "--format", "lvgl", "--lv-include", "lvgl.h",
   ]

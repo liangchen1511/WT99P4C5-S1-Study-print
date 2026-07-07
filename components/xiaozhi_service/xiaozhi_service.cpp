@@ -153,7 +153,7 @@ static void on_evt(esp_xiaozhi_chat_event_t ev, void *data, void *)
         auto *t = static_cast<esp_xiaozhi_chat_text_data_t *>(data);
         if (t && t->text) {
             ESP_LOGW(TAG, "chat text role=%d len=%u", (int)t->role, (unsigned)strlen(t->text));
-            if (t->role == ESP_XIAOZHI_CHAT_TEXT_ROLE_USER) emit(XZ_SVC_THINKING, "思考中…", t->text, true);
+            if (t->role == ESP_XIAOZHI_CHAT_TEXT_ROLE_USER) emit(XZ_SVC_THINKING, "思考中...", t->text, true);
             else {
                 s_wait_reply = false;
                 emit(XZ_SVC_SPEAKING, nullptr, t->text, false);
@@ -170,7 +170,7 @@ static void on_evt(esp_xiaozhi_chat_event_t ev, void *data, void *)
             if (s_dec) s_dec->ResetState();
             if (s_play_q) xQueueReset(s_play_q);
             xz_audio_out_ready();
-            emit(XZ_SVC_SPEAKING, "播放中…", nullptr, false);
+            emit(XZ_SVC_SPEAKING, "播放中...", nullptr, false);
         }
         else if (ts->state == ESP_XIAOZHI_CHAT_TTS_STATE_STOP) emit(XZ_SVC_READY, "待命，按住说话", nullptr, false);
         break;
@@ -274,7 +274,7 @@ static void init_task(void *)
         vTaskDelete(nullptr);
         return;
     }
-    emit(XZ_SVC_CONNECTING, "连接小智平台…", nullptr, false);
+    emit(XZ_SVC_CONNECTING, "连接小智平台...", nullptr, false);
     ESP_LOGW(TAG, "wait WiFi/SDIO settle %u ms before xiaozhi TLS", (unsigned)XZ_START_SETTLE_MS);
     vTaskDelay(pdMS_TO_TICKS(XZ_START_SETTLE_MS));
     if (!s_run) {
@@ -514,7 +514,7 @@ extern "C" esp_err_t xz_svc_ptt_down(void)
     s_wait_reply = false;
     s_wait_since_us = 0;
     s_ptt = true;
-    emit(XZ_SVC_LISTENING, "聆听中…", nullptr, false);
+    emit(XZ_SVC_LISTENING, "聆听中...", nullptr, false);
     return ESP_OK;
 }
 extern "C" esp_err_t xz_svc_ptt_up(void)
@@ -535,7 +535,7 @@ extern "C" esp_err_t xz_svc_ptt_up(void)
         emit(XZ_SVC_READY, "已连接，按住说话", nullptr, false);
         return err;
     }
-    emit(XZ_SVC_THINKING, "思考中…", nullptr, false);
+    emit(XZ_SVC_THINKING, "思考中...", nullptr, false);
     return ESP_OK;
 }
 extern "C" bool xz_svc_running(void) { return s_run; }

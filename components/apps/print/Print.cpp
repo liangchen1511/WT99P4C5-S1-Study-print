@@ -87,7 +87,7 @@ static void print_task(void *arg)
     }
     if (job->app != nullptr) {
         job->app->set_printing(true);
-        job->app->set_status("打印中…");
+        job->app->set_status("打印中...");
     }
     esp_err_t err = parent_print_sync_print_job(job->job_id);
     if (job->app != nullptr && err != ESP_OK) {
@@ -202,7 +202,7 @@ void Print::rebuild_job_list(void)
         lv_obj_t *btn = lv_btn_create(row);
         lv_obj_set_size(btn, 72, 36);
         lv_obj_t *btl = lv_label_create(btn);
-        lv_label_set_text(btl, (_printing || parent_print_sync_is_busy()) ? "…" : "打印");
+        lv_label_set_text(btl, (_printing || parent_print_sync_is_busy()) ? "..." : "打印");
         lv_obj_set_style_text_font(btl, &lv_font_ui_zh_22, 0);
         lv_obj_set_style_text_color(btl, lv_color_white(), 0);
         lv_obj_center(btl);
@@ -233,7 +233,7 @@ void Print::on_refresh_clicked(lv_event_t *e)
     if (app == nullptr) {
         return;
     }
-    app->set_status("刷新中…");
+    app->set_status("刷新中...");
     app->request_refresh();
 }
 

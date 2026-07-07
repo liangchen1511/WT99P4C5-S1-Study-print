@@ -106,7 +106,7 @@ bool AiChat::run(void)
     lv_label_set_long_mode(_status, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_font(_status, &lv_font_ui_zh_22, 0);
     lv_obj_set_style_text_color(_status, lv_color_hex(0x94A3B8), 0);
-    lv_label_set_text(_status, "初始化…");
+    lv_label_set_text(_status, "初始化...");
     _scroll = lv_obj_create(_root);
     lv_obj_set_width(_scroll, lv_pct(100));
     lv_obj_set_flex_grow(_scroll, 1);
