@@ -115,8 +115,13 @@
 <p class="muted">最多 2000 字；设备确认后通过热敏机打印。</p>
 <label class="form-block"><span class="form-label">正文</span><textarea id="print-text-body" rows="6" maxlength="2000" placeholder="输入要打印的文字…"></textarea></label>
 <button type="button" class="btn-pill btn-pill--primary btn-pill--block group" id="btn-print-text-upload">加入打印队列</button>
+</div></div>
+<div class="shell ix spot"><div class="core pad form-stack">
+<h3 style="margin:0">待打印队列</h3>
+<p class="muted">不想打印的可点删除；最多 5 条 pending，删后设备刷新即消失。</p>
+<button type="button" class="btn-pill" id="btn-print-queue-refresh" style="align-self:flex-start">刷新队列</button>
 <p id="print-upload-msg" class="hint" hidden></p>
-<ul id="print-upload-list" class="history-list"></ul>
+<ul id="print-queue-list" class="history-list print-queue-list"></ul>
 </div></div>
 </div>
 </section>
@@ -189,6 +194,6 @@
 </aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script src="/parent/app.js?v=20260704-mobile1"></script>
+<script src="/parent/app.js?v=20260707-print-queue"></script>
 </body>
 </html>

@@ -950,10 +950,6 @@ bool SoTi::run(void)
     lv_obj_set_style_pad_all(_root, 0, 0);
     lv_obj_set_style_radius(_root, 0, 0);
 
-    if (!Camera::ensurePreviewStreaming()) {
-        ESP_LOGW(TAG, "Camera stream not started (preview may delay)");
-    }
-
     _cam_canvas = lv_canvas_create(_root);
     lv_obj_set_size(_cam_canvas, _hor_res, _ver_res);
     lv_obj_align(_cam_canvas, LV_ALIGN_CENTER, 0, 0);
@@ -1053,12 +1049,10 @@ bool SoTi::run(void)
         lv_obj_move_background(_answer_layer);
     }
 
-    if (!Camera::ensureJpegEncoderForHw()) {
-        ESP_LOGW(TAG, "JPEG encoder unavailable; shutter may fail");
-    }
-
     Camera::setPreviewCanvasOverride(_cam_canvas);
-    Camera::setFrameProcessingEnabled(true);
+    if (!Camera::prepareSoTiCapture()) {
+        ESP_LOGW(TAG, "Camera stream not started (preview may delay)");
+    }
 
     if (bsp_display_lock(100)) {
         lv_obj_invalidate(_cam_canvas);
@@ -1084,6 +1078,7 @@ bool SoTi::pause(void)
     restoreLivePreview();
     Camera::setPreviewCanvasOverride(nullptr);
     Camera::setFrameProcessingEnabled(false);
+    Camera::stopPreviewStreamingIfRunning();
     /* Same HW JPEG block as video decoder; release so MJPEG player can open jpeg_new_decoder_engine(). */
     Camera::releaseJpegEncoderHw();
     showLoadingUi(false);
@@ -1107,10 +1102,8 @@ bool SoTi::resume(void)
         if (_cam_canvas != nullptr && lv_obj_is_valid(_cam_canvas)) {
             Camera::setPreviewCanvasOverride(_cam_canvas);
         }
-        Camera::setFrameProcessingEnabled(true);
-        (void)Camera::ensurePreviewStreaming();
+        (void)Camera::prepareSoTiCapture();
     }
-    (void)Camera::ensureJpegEncoderForHw();
     tryConsumeSdCardUpload();
     return true;
 }
@@ -1126,6 +1119,7 @@ bool SoTi::close(void)
     restoreLivePreview();
     Camera::setPreviewCanvasOverride(nullptr);
     Camera::setFrameProcessingEnabled(false);
+    Camera::stopPreviewStreamingIfRunning();
     Camera::releaseJpegEncoderHw();
     if (_cam_bg_buf != nullptr) {
         heap_caps_free(_cam_bg_buf);
@@ -1231,12 +1225,24 @@ void SoTi::on_shutter_click(lv_event_t *e)
         app->startDailyTask();
         return;
     }
-    if (!Camera::ensureJpegEncoderForHw()) {
-        ESP_LOGW(TAG, "Shutter: JPEG encoder not ready");
+    if (!Camera::prepareSoTiCapture()) {
+        ESP_LOGW(TAG, "Shutter: camera not ready");
+        static const char *btns[] = {"确定", ""};
+        lv_obj_t *mbox = lv_msgbox_create(NULL, "拍照失败", "相机未就绪，请退出后重进搜题。", btns, false);
+        if (mbox != nullptr) {
+            soti_apply_zh_font_22(mbox);
+            lv_obj_center(mbox);
+        }
         return;
     }
     if (!Camera::requestSoTiSnapshotAndWait(4000)) {
         ESP_LOGW(TAG, "Shutter: timeout or failed");
+        static const char *btns[] = {"确定", ""};
+        lv_obj_t *mbox = lv_msgbox_create(NULL, "拍照失败", "未获取到画面，请稍候再按快门。", btns, false);
+        if (mbox != nullptr) {
+            soti_apply_zh_font_22(mbox);
+            lv_obj_center(mbox);
+        }
         return;
     }
 

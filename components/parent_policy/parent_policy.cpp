@@ -362,17 +362,28 @@ static void poll_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS(20000));
     for (;;) {
         if (!s_poll_paused) {
-            if (fetch_policy_http() != ESP_OK) {
-                ESP_LOGD(TAG, "policy fetch skip (offline or server)");
+            esp_err_t err = fetch_policy_http();
+            if (err != ESP_OK) {
+                ESP_LOGD(TAG, "policy fetch skip err=%s", esp_err_to_name(err));
             }
+        } else {
+            ESP_LOGD(TAG, "policy poll paused");
         }
-        vTaskDelay(pdMS_TO_TICKS(PARENT_POLICY_POLL_MS));
+        /* 可被 parent_policy_poll_pause(false) 唤醒，立刻再拉一次 */
+        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(PARENT_POLICY_POLL_MS));
     }
 }
 
 extern "C" void parent_policy_poll_pause(bool paused)
 {
+    const bool was = s_poll_paused;
     s_poll_paused = paused;
+    if (was && !paused && s_poll_task != nullptr) {
+        xTaskNotifyGive(s_poll_task);
+        ESP_LOGI(TAG, "policy poll resumed (kick fetch)");
+    } else if (!was && paused) {
+        ESP_LOGI(TAG, "policy poll paused");
+    }
 }
 
 extern "C" void parent_policy_init(void)

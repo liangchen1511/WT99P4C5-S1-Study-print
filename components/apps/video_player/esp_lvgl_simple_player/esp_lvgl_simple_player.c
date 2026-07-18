@@ -453,12 +453,15 @@ static void show_video_task(void *arg)
     /* Get file size */
     ESP_GOTO_ON_FALSE(media_src_storage_get_size(&player_ctx.file, &player_ctx.filesize) == 0, ESP_ERR_NO_MEM, err, TAG, "Get file size failed");
 
-    /* Create input buffer */
+    /* Init decoder first so INTERNAL DMA rxlink is claimed before large SPIRAM buffers */
+    ESP_LOGI(TAG, "pre-decode dma_int=%u psram=%u",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    ESP_GOTO_ON_ERROR(video_decoder_init(), err, TAG, "Initialize video decoder failed");
+
+    /* Create input buffer (compressed JPEG bitstream; SPIRAM) */
     player_ctx.in_buff = video_decoder_malloc(player_ctx.in_buff_size, true, &player_ctx.in_buff_size);
     ESP_GOTO_ON_FALSE(player_ctx.in_buff, ESP_ERR_NO_MEM, err, TAG, "Allocation in_buff failed");
-
-    /* Init video decoder */
-    ESP_GOTO_ON_ERROR(video_decoder_init(), err, TAG, "Initialize video decoder failed");
 
     /* Get video output size */
     uint32_t height = 0;

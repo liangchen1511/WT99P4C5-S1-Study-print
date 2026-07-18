@@ -5,7 +5,7 @@
  */
 #pragma once
 
-/** 策略拉取间隔（毫秒） */
+/** 策略拉取间隔（毫秒）；恢复轮询时会立即再拉一次 */
 #ifndef PARENT_POLICY_POLL_MS
-#define PARENT_POLICY_POLL_MS (5 * 60 * 1000)
+#define PARENT_POLICY_POLL_MS (60 * 1000)
 #endif

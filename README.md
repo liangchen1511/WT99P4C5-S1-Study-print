@@ -54,6 +54,7 @@ Brookesia desktop firmware for **WT99P4C5-S1** (ESP32-P4 host + ESP32-C5 SDIO Wi
 ### 对话
 
 - **按住** 底部「按住说话」→ 松手后等待 AI 语音与文字回复。
+- Opening AI助手 keeps the status bar and only pauses clock refresh (hiding the bar caused a full-screen flash); on leave the clock redraws immediately and quietly (no TZ/`setClockFormat` change).
 - 若长时间停在「思考中」，串口查看 `xz_svc` 的 `audio sent` / `send_audio_data` 日志。
 - 退出 App 后其它功能（搜题、家长聊等）不受影响。
 
@@ -151,6 +152,7 @@ Background HTTP is **paused** on screen off or Wi‑Fi loss and **stagger-resume
 >- Currently only supports MJPEG format videos (SD **root** `*.mjpeg`)
 >- Portrait videos are **letterboxed** on the 1024×600 landscape display
 >- After inserting the SD card, the video player APP will automatically appear on the interface
+>- Before play, the app releases CSI buffers/DMA and the HW JPEG encoder, and pauses parent background HTTP; if video fails after 搜题/相机, rebuild+flash this fix then reopen 视频
 
 ### Video Format Conversion
 

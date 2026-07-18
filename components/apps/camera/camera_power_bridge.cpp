@@ -29,6 +29,8 @@ static int64_t s_last_disc_us;
 
 static void pause_bg_http(const char *reason);
 static void stop_resume_timers(void);
+static void ensure_bg_guard(void);
+static void schedule_bg_resume(uint32_t delay_ms, const char *reason);
 
 static void on_sta_disconnected(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -149,6 +151,20 @@ static void on_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, 
     schedule_bg_resume(15000, "got ip");
 }
 
+extern "C" void camera_power_bridge_kick_resume(const char *reason)
+{
+    ensure_bg_guard();
+    if (parent_net_sta_has_ip()) {
+        s_have_ip = true;
+    }
+    if (!s_have_ip || !power_manager_is_screen_on()) {
+        ESP_LOGI(TAG, "kick resume deferred (%s) ip=%d screen=%d", reason != nullptr ? reason : "?",
+                 (int)s_have_ip, (int)power_manager_is_screen_on());
+        return;
+    }
+    schedule_bg_resume(500, reason != nullptr ? reason : "kick");
+}
+
 static void on_lost_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     (void)arg;
@@ -208,7 +224,14 @@ static void ensure_bg_guard(void)
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_sta_disconnected, nullptr, nullptr);
     s_guard_registered = true;
     pause_bg_http("boot");
-    ESP_LOGI(TAG, "SDIO bg guard ready");
+    /* WiFi 常在 splash/deferred 期间已获 IP，晚注册会漏掉 GOT_IP → 策略永久暂停 */
+    if (parent_net_sta_has_ip()) {
+        s_have_ip = true;
+        schedule_bg_resume(3000, "boot already online");
+        ESP_LOGI(TAG, "SDIO bg guard ready (IP already up)");
+    } else {
+        ESP_LOGI(TAG, "SDIO bg guard ready (waiting IP)");
+    }
 }
 
 extern "C" void camera_power_bridge_init(void)

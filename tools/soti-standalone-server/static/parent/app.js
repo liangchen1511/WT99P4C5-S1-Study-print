@@ -663,6 +663,7 @@
     $("#page-title").textContent = titles[name] || name;
     if (name === "chat") startChatPanel();
     else stopChatPanel();
+    if (name === "print") refreshPrintQueue().catch(() => {});
     runPanelMotion(name);
   }
 
@@ -963,30 +964,57 @@
     uploadAlbumFiles(input.files).catch((e) => alert("上传失败: " + e.message));
   });
 
+  function renderPrintQueue(items) {
+    const list = $("#print-queue-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<li class="muted" style="padding:12px">暂无待打印任务</li>';
+      return;
+    }
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "history-item print-queue-item";
+      const kind = item.type === "text" ? "文字" : "图片";
+      let detail = kind + " · " + escapeHtml(item.name || "job");
+      if (item.size) detail += " (" + Math.round(item.size / 1024) + " KB)";
+      if (item.width && item.height) detail += " · " + item.width + "×" + item.height;
+      li.innerHTML =
+        '<div class="history-body"><p class="history-preview">#' +
+        item.id +
+        " " +
+        detail +
+        '</p></div><button type="button" class="btn-pill btn-print-cancel" data-id="' +
+        item.id +
+        '">删除</button>';
+      li.querySelector(".btn-print-cancel").addEventListener("click", (e) => {
+        e.stopPropagation();
+        cancelPrintJob(item.id);
+      });
+      list.appendChild(li);
+    });
+  }
+
+  async function refreshPrintQueue() {
+    const data = await api("/parent/api/print/queue");
+    renderPrintQueue(data.items || []);
+  }
+
+  async function cancelPrintJob(id) {
+    if (!id) return;
+    if (!confirm("从队列删除 #" + id + "？设备将不再收到此任务。")) return;
+    await api("/parent/api/print/cancel", { method: "POST", body: JSON.stringify({ id }) });
+    await refreshPrintQueue();
+  }
+
   function appendPrintUploadResult(data) {
     const msg = $("#print-upload-msg");
-    const list = $("#print-upload-list");
     msg.hidden = true;
-    const li = document.createElement("li");
-    li.className = "history-item";
     const item = data.item || {};
     const kind = item.type === "text" ? "文字" : "图片";
-    let detail = kind + " · " + escapeHtml(item.name || "job");
-    if (item.size) {
-      detail += " (" + Math.round(item.size / 1024) + " KB)";
-    }
-    if (item.width && item.height) {
-      detail += " · " + item.width + "×" + item.height;
-    }
-    li.innerHTML =
-      '<div class="history-body"><p class="history-preview">已排队 #' +
-      item.id +
-      "：" +
-      detail +
-      "</p></div>";
-    list.prepend(li);
-    msg.textContent = "已加入打印队列，请在设备「打印」App 中确认出纸";
+    msg.textContent = "已加入打印队列 #" + item.id + "（" + kind + "），可在下方删除或到设备确认出纸";
     msg.hidden = false;
+    refreshPrintQueue().catch(() => {});
   }
 
   async function uploadPrintImage() {
@@ -1034,6 +1062,10 @@
 
   $("#btn-print-text-upload").addEventListener("click", () => {
     uploadPrintText().catch(alertUploadError);
+  });
+
+  $("#btn-print-queue-refresh").addEventListener("click", () => {
+    refreshPrintQueue().catch((e) => alert(e.message));
   });
 
   $("#btn-chat-send").addEventListener("click", () => {

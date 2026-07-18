@@ -18,12 +18,14 @@
 #include "esp_lvgl_simple_player/esp_lvgl_simple_player.h"
 #include "VideoPlayer.hpp"
 #include "parent_guard.hpp"
+#include "parent_policy.hpp"
+#include "parent_chat/parent_chat_api.hpp"
 #include "camera/Camera.hpp"
 #include "audio_player.h"
-#include "esp_heap_caps.h"
 
 #define APP_MAX_VIDEO_NUM           (15)
-#define APP_VIDEO_FRAME_BUF_SIZE    (720 * 1280 * BSP_LCD_BITS_PER_PIXEL / 8)
+/* Compressed MJPEG frame input (not RGB565 framebuffer); keep small for DMA headroom */
+#define APP_VIDEO_JPEG_IN_BUF_SIZE  (512 * 1024)
 #define APP_CACHE_BUF_SIZE          (64 * 1024)
 #define APP_VIDEO_DROPDOWN_H        (80)
 #define APP_VIDEO_CONTROLS_H        (85)
@@ -79,9 +81,17 @@ bool AppVideoPlayer::run(void)
         return false;
     }
 
-    ESP_LOGI(TAG, "run: heap=%u min=%u", (unsigned)esp_get_free_heap_size(),
-             (unsigned)esp_get_minimum_free_heap_size());
-    Camera::stopPreviewStreamingIfRunning();
+    ESP_LOGI(TAG, "run: heap=%u dma_int=%u psram=%u",
+             (unsigned)esp_get_free_heap_size(),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    /* Free CSI DMA/PSRAM + JPEG encoder before HW MJPEG decode (rxlink needs INTERNAL DMA) */
+    Camera::setFrameProcessingEnabled(false);
+    Camera::releaseJpegEncoderHw();
+    Camera::releasePreviewPsramBuffers();
+    parent_chat_bg_poll_stop();
+    parent_chat_bg_poll_wait_stop(2000);
+    parent_policy_poll_pause(true);
     audio_player_stop();
     esp_lvgl_simple_player_pause_background();
 
@@ -116,6 +126,9 @@ bool AppVideoPlayer::close(void)
     bsp_display_unlock();
     esp_lvgl_simple_player_del();
     bsp_display_lock(100);
+    parent_policy_poll_pause(false);
+    parent_chat_bg_poll_start();
+    Camera::setFrameProcessingEnabled(true);
 
     return true;
 }
@@ -184,7 +197,7 @@ void AppVideoPlayer::app_show_ui(void)
     esp_lvgl_simple_player_cfg_t player_cfg = {
         .video_path = _video_path,
         .screen = cont_col,
-        .buff_size = APP_VIDEO_FRAME_BUF_SIZE,
+        .buff_size = APP_VIDEO_JPEG_IN_BUF_SIZE,
         .cache_buff_size = APP_CACHE_BUF_SIZE,
         .cache_buff_in_psram = true,
         .screen_width = BSP_LCD_H_RES,

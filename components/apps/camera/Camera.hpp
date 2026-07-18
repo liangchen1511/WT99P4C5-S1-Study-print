@@ -52,6 +52,9 @@ public:
 
     static void setFrameProcessingEnabled(bool enable);
 
+    /** SoTi 进入/快门前：清 DELETE、开帧处理、重启 CSI 流、就绪 JPEG 编码器。 */
+    static bool prepareSoTiCapture(void);
+
     /** Arm JPEG capture; blocks until the next frame is encoded or timeout. */
     static bool requestSoTiSnapshotAndWait(uint32_t timeout_ms);
 

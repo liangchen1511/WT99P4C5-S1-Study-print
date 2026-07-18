@@ -282,6 +282,10 @@ void Camera::releasePreviewPsramBuffers(void)
         return;
     }
     Camera *cam = s_camera_hw_singleton;
+    const int fd = cam->_camera_ctlr_handle;
+    if (fd >= 0) {
+        (void)app_video_release_bufs(fd);
+    }
     for (int i = 0; i < EXAMPLE_CAM_BUF_NUM; i++) {
         if (cam->_cam_buffer[i] != nullptr) {
             heap_caps_free(cam->_cam_buffer[i]);
@@ -329,6 +333,35 @@ void Camera::setFrameProcessingEnabled(bool enable)
     }
 }
 
+bool Camera::prepareSoTiCapture(void)
+{
+    if (s_camera_hw_singleton == nullptr) {
+        ESP_LOGE(TAG, "prepareSoTiCapture: camera not inited");
+        return false;
+    }
+    if (camera_event_group != nullptr) {
+        xEventGroupClearBits(camera_event_group, CAMERA_EVENT_DELETE);
+        xEventGroupSetBits(camera_event_group, CAMERA_EVENT_TASK_RUN);
+    }
+    if (s_soti_snap_sem != nullptr) {
+        while (xSemaphoreTake(s_soti_snap_sem, 0) == pdTRUE) {
+        }
+    }
+    if (!ensurePreviewStreaming()) {
+        stopPreviewStreamingIfRunning();
+        s_camera_stream_running = false;
+        if (!ensurePreviewStreaming()) {
+            ESP_LOGE(TAG, "prepareSoTiCapture: stream failed");
+            return false;
+        }
+    }
+    if (!ensureJpegEncoderForHw()) {
+        ESP_LOGE(TAG, "prepareSoTiCapture: JPEG encoder failed");
+        return false;
+    }
+    return true;
+}
+
 bool Camera::requestSoTiSnapshotAndWait(uint32_t timeout_ms)
 {
     if (s_soti_snap_sem == nullptr) {
@@ -336,6 +369,8 @@ bool Camera::requestSoTiSnapshotAndWait(uint32_t timeout_ms)
         if (s_soti_snap_sem == nullptr) {
             return false;
         }
+    }
+    while (xSemaphoreTake(s_soti_snap_sem, 0) == pdTRUE) {
     }
     portENTER_CRITICAL(&s_soti_snap_mux);
     s_soti_snapshot_requested = true;
@@ -539,10 +574,7 @@ bool Camera::init(void)
     }
 
     ESP_ERROR_CHECK(esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &data_cache_line_size));
-    if (!allocateCaptureBuffersIfNeeded()) {
-        ESP_LOGE(TAG, "capture buffer alloc failed");
-        return false;
-    }
+    /* Defer ~7MB CSI framebufs until Camera/SoTi preview; keep PSRAM free for MJPEG. */
 
     // Register the video frame operation callback
     ESP_ERROR_CHECK(app_video_register_frame_operation_cb(camera_video_frame_operation));

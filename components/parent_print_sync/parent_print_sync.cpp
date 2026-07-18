@@ -24,7 +24,6 @@
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -49,16 +48,6 @@ static volatile bool s_busy;
 static SemaphoreHandle_t s_job_mux;
 static bool s_sdio_bg_paused;
 
-static bool have_sta_ip(void)
-{
-    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    esp_netif_ip_info_t ip = {};
-    if (netif == nullptr || esp_netif_get_ip_info(netif, &ip) != ESP_OK) {
-        return false;
-    }
-    return ip.ip.addr != 0;
-}
-
 static void sdio_bg_http_pause(bool pause)
 {
     if (pause) {
@@ -77,8 +66,9 @@ static void sdio_bg_http_pause(bool pause)
         return;
     }
     s_sdio_bg_paused = false;
-    if (!power_manager_is_screen_on() || !have_sta_ip()) {
-        ESP_LOGD(TAG, "SDIO bg HTTP stay paused (no ip or screen off)");
+    /* 亮屏时务必恢复；勿因瞬时无 IP 提前 return，否则策略/相册会永久卡住 */
+    if (!power_manager_is_screen_on()) {
+        ESP_LOGW(TAG, "SDIO bg HTTP stay paused (screen off after print)");
         return;
     }
     parent_album_sync_pause(false);
@@ -429,11 +419,14 @@ static esp_err_t print_text_job(const parent_print_job_t &job)
     char path[96];
     snprintf(path, sizeof(path), "/parent/api/print/text/%d", job.id);
     std::string body;
-    if (!http_get_text(path, body, nullptr)) {
+    int st = 0;
+    if (!http_get_text(path, body, &st)) {
+        ESP_LOGE(TAG, "text fetch id=%d http_st=%d", job.id, st);
         return ESP_FAIL;
     }
     cJSON *root = cJSON_Parse(body.c_str());
     if (root == nullptr) {
+        ESP_LOGE(TAG, "text json parse id=%d", job.id);
         return ESP_FAIL;
     }
     const cJSON *txt = cJSON_GetObjectItemCaseSensitive(root, "body");
@@ -443,9 +436,14 @@ static esp_err_t print_text_job(const parent_print_job_t &job)
     }
     std::string to_print = txt->valuestring;
     cJSON_Delete(root);
+    if (to_print.empty()) {
+        ESP_LOGE(TAG, "text empty id=%d", job.id);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    ESP_LOGI(TAG, "text print id=%d len=%u", job.id, (unsigned)to_print.size());
     esp_err_t err = escpos_printer_print_utf8(to_print.c_str());
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "text print err=%s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "text print err=%s id=%d", esp_err_to_name(err), job.id);
     }
     return err;
 }

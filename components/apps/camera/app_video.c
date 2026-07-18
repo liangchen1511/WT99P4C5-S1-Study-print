@@ -229,6 +229,29 @@ errout_req_bufs:
     return ESP_FAIL;
 }
 
+esp_err_t app_video_release_bufs(int video_fd)
+{
+    if (video_fd < 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    struct v4l2_requestbuffers req;
+    memset(&req, 0, sizeof(req));
+    req.count = 0;
+    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.memory = app_camera_video.camera_mem_mode;
+    if (req.memory == 0) {
+        req.memory = V4L2_MEMORY_USERPTR;
+    }
+    if (ioctl(video_fd, VIDIOC_REQBUFS, &req) != 0) {
+        ESP_LOGW(TAG, "release bufs (REQBUFS 0) failed");
+        return ESP_FAIL;
+    }
+    for (int i = 0; i < MAX_BUFFER_COUNT; i++) {
+        app_camera_video.camera_buffer[i] = NULL;
+    }
+    return ESP_OK;
+}
+
 esp_err_t app_video_get_bufs(int fb_num, void **fb)
 {
     if (fb_num > MAX_BUFFER_COUNT) {

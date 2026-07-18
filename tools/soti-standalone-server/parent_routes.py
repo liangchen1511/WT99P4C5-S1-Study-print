@@ -24,6 +24,7 @@ from parent_store import (
     print_list_pending,
     print_read_chunk,
     print_read_text,
+    print_read_text_payload,
     chat_insert,
     chat_list_recent,
     chat_mark_read,
@@ -358,6 +359,14 @@ def handle_get(handler: BaseHTTPRequestHandler) -> bool:
         _json_response(handler, 200, {"ok": True, "items": items})
         return True
 
+    if path == "/parent/api/print/queue":
+        device_id = _session_ok(handler)
+        if not device_id:
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        _json_response(handler, 200, {"ok": True, "items": print_list_pending(device_id)})
+        return True
+
     if path.startswith("/parent/api/print/file/"):
         if not _device_auth_ok(handler):
             _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
@@ -396,7 +405,11 @@ def handle_get(handler: BaseHTTPRequestHandler) -> bool:
         device_id = str(qs.get("device_id", [DEFAULT_DEVICE_ID])[0]).strip().upper()
         if handler.headers.get("X-Device-Id"):
             device_id = handler.headers.get("X-Device-Id", device_id).strip().upper()
-        payload = print_read_text_payload(print_id, device_id)
+        try:
+            payload = print_read_text_payload(print_id, device_id)
+        except Exception as e:
+            _json_response(handler, 500, {"ok": False, "error": "read failed: " + str(e)})
+            return True
         if payload is None:
             _json_response(handler, 404, {"ok": False, "error": "not found"})
             return True
@@ -626,6 +639,8 @@ def handle_post(handler: BaseHTTPRequestHandler) -> bool:
             _json_response(handler, 200, {"ok": True, "item": row})
         except ValueError as e:
             _json_response(handler, 400, {"ok": False, "error": str(e)})
+        except Exception as e:
+            _json_response(handler, 500, {"ok": False, "error": "upload failed: " + str(e)})
         return True
 
     if path == "/parent/api/print/ack":
@@ -639,6 +654,26 @@ def handle_post(handler: BaseHTTPRequestHandler) -> bool:
         device_id = str(
             body.get("device_id") or handler.headers.get("X-Device-Id") or DEFAULT_DEVICE_ID
         ).strip().upper()
+        try:
+            print_id = int(body.get("id", 0))
+        except (TypeError, ValueError):
+            _json_response(handler, 400, {"ok": False, "error": "bad id"})
+            return True
+        if not print_ack(print_id, device_id):
+            _json_response(handler, 404, {"ok": False, "error": "not found"})
+        else:
+            _json_response(handler, 200, {"ok": True})
+        return True
+
+    if path == "/parent/api/print/cancel":
+        device_id = _session_ok(handler)
+        if not device_id:
+            _json_response(handler, 401, {"ok": False, "error": "unauthorized"})
+            return True
+        body = _read_json_body(handler)
+        if body is None:
+            _json_response(handler, 400, {"ok": False, "error": "bad json"})
+            return True
         try:
             print_id = int(body.get("id", 0))
         except (TypeError, ValueError):

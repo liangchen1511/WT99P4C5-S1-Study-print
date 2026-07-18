@@ -307,10 +307,8 @@ void ParentChat::updateScrollPadding(void)
     if (_scroll == nullptr || _inputStack == nullptr) {
         return;
     }
-    lv_coord_t pad = PCHAT_INPUT_ROW_H;
-    if (_keyboard != nullptr && !lv_obj_has_flag(_keyboard, LV_OBJ_FLAG_HIDDEN)) {
-        pad += _kb_h;
-    }
+    /* input/keyboard 与消息区是 flex 兄弟，会自行挤占高度；仅候选栏 IGNORE_LAYOUT 盖住消息底部 */
+    lv_coord_t pad = 8;
 #if LV_USE_IME_PINYIN
     if (_ime != nullptr) {
         lv_obj_t *cp = lv_ime_pinyin_get_cand_panel(_ime);
@@ -319,7 +317,7 @@ void ParentChat::updateScrollPadding(void)
         }
     }
 #endif
-    lv_obj_set_style_pad_bottom(_scroll, pad + 8, 0);
+    lv_obj_set_style_pad_bottom(_scroll, pad, 0);
     lv_obj_update_layout(_inputStack);
     lv_obj_update_layout(_scroll);
 }
@@ -366,6 +364,7 @@ static void deferred_layout_input(void *p)
     ParentChat *app = static_cast<ParentChat *>(p);
     if (app) {
         app->layoutInputPanels();
+        app->scrollToBottom(false);
     }
 }
 
@@ -390,7 +389,8 @@ void ParentChat::onTextareaEvent(lv_event_t *e)
     if (code == LV_EVENT_CLICKED || code == LV_EVENT_FOCUSED) {
         lv_keyboard_set_textarea(app->_keyboard, app->_input);
         app->layoutInputPanels();
-        app->scrollToBottom(true);
+        /* 等 flex 重排后再滚到底，保证最后一条贴在输入框上方 */
+        lv_async_call(deferred_scroll_bottom, app);
     } else if (code == LV_EVENT_CANCEL || code == LV_EVENT_DEFOCUSED) {
         app->hideInputPanels();
     }

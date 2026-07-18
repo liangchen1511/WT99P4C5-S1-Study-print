@@ -73,6 +73,9 @@ int app_video_open(char *dev, video_fmt_t init_fmt);
  */
 esp_err_t app_video_set_bufs(int video_fd, uint32_t fb_num, const void **fb);
 
+/** Drop V4L2 buffer claims (REQBUFS count=0) so CSI/ISP can free DMA descriptors. */
+esp_err_t app_video_release_bufs(int video_fd);
+
 /**
  * @brief Retrieve video capture buffers.
  *

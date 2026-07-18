@@ -15,7 +15,7 @@
 - 设备后台约 **12 秒**轮询 `GET /parent/api/print/poll`；在桌面 **打印** App 中查看队列并点 **打印** 确认出纸（**不写入 SD 相册**）。
 - 图片 job：分片 `GET /parent/api/print/file/{id}?off=&len=` → SD 临时文件 → `escpos_printer_print_jpeg_file` → `POST /parent/api/print/ack`。
 - 文字 job：`GET /parent/api/print/text/{id}` → `escpos_printer_print_utf8` → ack。
-- API：`POST /parent/api/print/upload`（家长 Bearer 登录）、上述 poll/file/text/ack（设备 `UPLOAD_TOKEN` + `X-Device-Id`）。
+- API：`POST /parent/api/print/upload`（家长 Bearer 登录）、`GET /parent/api/print/queue`（家长查队列）、`POST /parent/api/print/cancel`（家长删队列）、上述 poll/file/text/ack（设备 `UPLOAD_TOKEN` + `X-Device-Id`）。
 - 环境变量（可选）：`PARENT_PRINT_MAX_WIDTH=384`、`PARENT_PRINT_MAX_PENDING=5`、`PARENT_PRINT_MAX_TEXT_CHARS=2000`。
 
 ## 亲子聊天
@@ -97,7 +97,7 @@ bash /tmp/soti-ecs/deploy-parent-to-ecs.sh
 ## 功能
 
 - **搜题历史**：每次识题成功写入 SQLite（`data/parent.db`），可选 320px 缩略图；详情抽屉底部可 **下载照片**（`搜题-{id}.jpg`）
-- **管控策略**：应用开关 + 时段 JSON；设备每 5 分钟 `GET /parent/api/policy`
+- **管控策略**：应用开关 + 时段 JSON；设备约每 **60 秒** `GET /parent/api/policy`（恢复网络/亮屏后会立刻再拉一次）
 
 ## 设备固件
 
