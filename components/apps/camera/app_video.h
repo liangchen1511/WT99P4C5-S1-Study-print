@@ -58,13 +58,16 @@ esp_err_t app_video_main(i2c_master_bus_handle_t i2c_bus_handle);
  */
 int app_video_open(char *dev, video_fmt_t init_fmt);
 
+/** Close a video device descriptor after its stream and buffers are released. */
+esp_err_t app_video_close(int video_fd);
+
 /**
  * @brief Set up video capture buffers.
  *
  * Configures the video device to use the specified number of buffers for
  * capturing video frames. Ensures the buffer count is within acceptable limits
  * and allocates buffers either via memory-mapped I/O or user pointers.
- * Closes the device on failure.
+ * Releases any partially configured buffers on failure; the caller retains the descriptor.
  *
  * @param video_fd File descriptor for the video device.
  * @param fb_num Number of frame buffers to allocate.

@@ -33,7 +33,7 @@
 
 #define ALIGN_UP_BY(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
 
-#define CAMERA_INIT_TASK_WAIT_MS            (1000)
+#define CAMERA_INIT_TASK_WAIT_MS            (8000)
 /** LVGL / SoTi must not block forever waiting for CSI stream teardown. */
 #define CAMERA_STREAM_STOP_WAIT_MS          (5000)
 #define FPS_PRINT                           (0)
@@ -87,6 +87,29 @@ static size_t s_soti_upload_jpeg_len = 0;
 static portMUX_TYPE s_soti_upload_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static SemaphoreHandle_t s_jpeg_enc_mutex = nullptr;
+static SemaphoreHandle_t s_camera_lifecycle_mutex = nullptr;
+
+static bool camera_lifecycle_lock(uint32_t timeout_ms)
+{
+    return s_camera_lifecycle_mutex != nullptr &&
+           xSemaphoreTakeRecursive(s_camera_lifecycle_mutex, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+static void camera_lifecycle_unlock(void)
+{
+    xSemaphoreGiveRecursive(s_camera_lifecycle_mutex);
+}
+
+static bool jpeg_encoder_lock(void)
+{
+    return s_jpeg_enc_mutex != nullptr &&
+           xSemaphoreTake(s_jpeg_enc_mutex, pdMS_TO_TICKS(12000)) == pdTRUE;
+}
+
+static void jpeg_encoder_unlock(void)
+{
+    xSemaphoreGive(s_jpeg_enc_mutex);
+}
 
 static void stashSoTiUploadCopy(const uint8_t *src, size_t len)
 {
@@ -100,12 +123,12 @@ static void stashSoTiUploadCopy(const uint8_t *src, size_t len)
     }
     memcpy(copy, src, len);
     portENTER_CRITICAL(&s_soti_upload_mux);
-    if (s_soti_upload_jpeg != nullptr) {
-        heap_caps_free(s_soti_upload_jpeg);
-    }
+    uint8_t *old = s_soti_upload_jpeg;
     s_soti_upload_jpeg = copy;
     s_soti_upload_jpeg_len = len;
     portEXIT_CRITICAL(&s_soti_upload_mux);
+    /* Heap operations may take locks; never call them while holding a spinlock. */
+    heap_caps_free(old);
 }
 
 uint8_t *Camera::takeSoTiUploadJpeg(size_t *jpeg_len_out)
@@ -171,16 +194,34 @@ bool Camera::allocateCaptureBuffersIfNeeded(void)
         return false;
     }
     Camera *cam = s_camera_hw_singleton;
-    /* Must treat nullptr + size as unallocated: uninitialized _cam_buffer could be non-null garbage. */
-    if (cam->_cam_buffer[0] != nullptr && cam->_cam_buffer_size[0] > 0) {
-        return true;
-    }
     esp_err_t ac = esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &data_cache_line_size);
     if (ac != ESP_OK) {
         ESP_LOGE(TAG, "capture buffers: cache alignment failed");
         return false;
     }
     const size_t sz = (size_t)cam->_hor_res * (size_t)cam->_ver_res * BSP_LCD_BITS_PER_PIXEL / 8;
+
+    bool all_ready = true;
+    for (int i = 0; i < EXAMPLE_CAM_BUF_NUM; i++) {
+        if (cam->_cam_buffer[i] == nullptr || cam->_cam_buffer_size[i] != sz) {
+            all_ready = false;
+            break;
+        }
+    }
+    if (all_ready) {
+        return true;
+    }
+
+    /* Repair a partial allocation as one unit. This is only called while the
+     * lifecycle lock is held and no CSI stream is using the pointers. */
+    for (int i = 0; i < EXAMPLE_CAM_BUF_NUM; i++) {
+        if (cam->_cam_buffer[i] != nullptr) {
+            heap_caps_free(cam->_cam_buffer[i]);
+            cam->_cam_buffer[i] = nullptr;
+            cam->_cam_buffer_size[i] = 0;
+        }
+    }
+
     for (int i = 0; i < EXAMPLE_CAM_BUF_NUM; i++) {
         cam->_cam_buffer[i] =
             (uint8_t *)heap_caps_aligned_alloc(data_cache_line_size, sz, MALLOC_CAP_SPIRAM);
@@ -211,80 +252,133 @@ bool Camera::allocateCaptureBuffersIfNeeded(void)
     return true;
 }
 
+bool Camera::preallocateCaptureBuffers(void)
+{
+    if (!camera_lifecycle_lock(10000)) {
+        ESP_LOGE(TAG, "preallocateCaptureBuffers: lifecycle mutex timeout");
+        return false;
+    }
+    bool ok = allocateCaptureBuffersIfNeeded();
+    camera_lifecycle_unlock();
+    return ok;
+}
+
 bool Camera::ensurePreviewStreaming(void)
 {
-    if (s_camera_hw_singleton == nullptr) {
+    if (s_camera_hw_singleton == nullptr || !camera_lifecycle_lock(10000)) {
         return false;
-    }
-    if (!allocateCaptureBuffersIfNeeded()) {
-        ESP_LOGE(TAG, "ensurePreviewStreaming: capture buffers unavailable");
-        return false;
-    }
-    if (s_camera_stream_running && app_video_stream_task_is_active()) {
-        return true;
-    }
-    if (s_camera_stream_running && !app_video_stream_task_is_active()) {
-        ESP_LOGW(TAG, "ensurePreviewStreaming: stale stream flag, reset");
-        s_camera_stream_running = false;
     }
 
-    const int prev_fd = s_camera_hw_singleton->_camera_ctlr_handle;
-    if (prev_fd >= 0 && app_video_stream_task_is_active()) {
-        ESP_LOGW(TAG, "ensurePreviewStreaming: stream task active but flag clear; stop before set_bufs");
-        (void)app_video_stream_task_stop(prev_fd);
-        if (app_video_stream_wait_stop(CAMERA_STREAM_STOP_WAIT_MS) != ESP_OK) {
-            ESP_LOGW(TAG, "ensurePreviewStreaming: stream stop timed out");
+    Camera *cam = s_camera_hw_singleton;
+    if (s_camera_stream_running && app_video_stream_task_is_active()) {
+        camera_lifecycle_unlock();
+        return true;
+    }
+    if (app_video_stream_task_is_active()) {
+        ESP_LOGW(TAG, "ensurePreviewStreaming: stopping stale stream task before rebind");
+        if (app_video_stream_task_stop(cam->_camera_ctlr_handle) != ESP_OK ||
+            app_video_stream_wait_stop(CAMERA_STREAM_STOP_WAIT_MS) != ESP_OK) {
+            ESP_LOGE(TAG, "ensurePreviewStreaming: stale stream did not stop");
+            camera_lifecycle_unlock();
+            return false;
+        }
+    }
+    s_camera_stream_running = false;
+
+    if (!allocateCaptureBuffersIfNeeded()) {
+        ESP_LOGE(TAG, "ensurePreviewStreaming: capture buffers unavailable");
+        camera_lifecycle_unlock();
+        return false;
+    }
+
+    if (cam->_camera_ctlr_handle < 0) {
+        cam->_camera_ctlr_handle = app_video_open(EXAMPLE_CAM_DEV_PATH, APP_VIDEO_FMT_RGB565);
+        if (cam->_camera_ctlr_handle < 0) {
+            ESP_LOGE(TAG, "ensurePreviewStreaming: reopen camera failed");
+            camera_lifecycle_unlock();
+            return false;
         }
     }
 
-    esp_err_t e = app_video_set_bufs(s_camera_hw_singleton->_camera_ctlr_handle, EXAMPLE_CAM_BUF_NUM,
-                                     (const void **)s_camera_hw_singleton->_cam_buffer);
+    esp_err_t e = app_video_set_bufs(cam->_camera_ctlr_handle, EXAMPLE_CAM_BUF_NUM,
+                                     (const void **)cam->_cam_buffer);
+    if (e != ESP_OK) {
+        /* A failed VIDIOC_REQBUFS must not poison every future shutter. Reopen
+         * the device once and bind the already-reserved buffers again. */
+        ESP_LOGW(TAG, "ensurePreviewStreaming: set_bufs failed, reopen and retry");
+        (void)app_video_release_bufs(cam->_camera_ctlr_handle);
+        (void)app_video_close(cam->_camera_ctlr_handle);
+        cam->_camera_ctlr_handle = app_video_open(EXAMPLE_CAM_DEV_PATH, APP_VIDEO_FMT_RGB565);
+        if (cam->_camera_ctlr_handle < 0) {
+            ESP_LOGE(TAG, "ensurePreviewStreaming: camera reopen after set_bufs failed");
+            camera_lifecycle_unlock();
+            return false;
+        }
+        e = app_video_set_bufs(cam->_camera_ctlr_handle, EXAMPLE_CAM_BUF_NUM,
+                               (const void **)cam->_cam_buffer);
+    }
     if (e != ESP_OK) {
         ESP_LOGE(TAG, "ensurePreviewStreaming: set_bufs failed");
+        camera_lifecycle_unlock();
         return false;
     }
-    e = app_video_stream_task_start(s_camera_hw_singleton->_camera_ctlr_handle, 0);
+    e = app_video_stream_task_start(cam->_camera_ctlr_handle, 0);
     if (e != ESP_OK) {
         ESP_LOGE(TAG, "ensurePreviewStreaming: stream start failed");
+        (void)app_video_release_bufs(cam->_camera_ctlr_handle);
+        camera_lifecycle_unlock();
         return false;
     }
     s_camera_stream_running = true;
+    camera_lifecycle_unlock();
     return true;
 }
 
-void Camera::stopPreviewStreamingIfRunning(void)
+bool Camera::stopPreviewStreamingIfRunning(void)
 {
-    if (s_camera_hw_singleton == nullptr) {
-        return;
+    if (s_camera_hw_singleton == nullptr || !camera_lifecycle_lock(10000)) {
+        return false;
     }
     const int fd = s_camera_hw_singleton->_camera_ctlr_handle;
     if (fd < 0) {
         s_camera_stream_running = false;
-        return;
+        camera_lifecycle_unlock();
+        return true;
     }
     /*
      * s_camera_stream_running can be false while the stream task is still alive after errors,
      * or true while the task already exited — always key off the real task state.
      */
     if (app_video_stream_task_is_active()) {
-        (void)app_video_stream_task_stop(fd);
-        if (app_video_stream_wait_stop(CAMERA_STREAM_STOP_WAIT_MS) != ESP_OK) {
-            ESP_LOGW(TAG, "stopPreviewStreaming: wait timed out (fd=%d)", fd);
+        if (app_video_stream_task_stop(fd) != ESP_OK ||
+            app_video_stream_wait_stop(CAMERA_STREAM_STOP_WAIT_MS) != ESP_OK) {
+            ESP_LOGE(TAG, "stopPreviewStreaming: wait timed out (fd=%d); keep buffers", fd);
+            camera_lifecycle_unlock();
+            return false;
         }
     }
     s_camera_stream_running = false;
+    camera_lifecycle_unlock();
+    return true;
 }
 
-void Camera::releasePreviewPsramBuffers(void)
+bool Camera::releasePreviewPsramBuffers(void)
 {
-    stopPreviewStreamingIfRunning();
-    if (s_camera_hw_singleton == nullptr) {
-        return;
+    if (s_camera_hw_singleton == nullptr || !camera_lifecycle_lock(10000)) {
+        return false;
+    }
+    if (!stopPreviewStreamingIfRunning()) {
+        camera_lifecycle_unlock();
+        return false;
     }
     Camera *cam = s_camera_hw_singleton;
     const int fd = cam->_camera_ctlr_handle;
     if (fd >= 0) {
-        (void)app_video_release_bufs(fd);
+        if (app_video_release_bufs(fd) != ESP_OK) {
+            ESP_LOGE(TAG, "releasePreviewPsramBuffers: driver still owns buffers");
+            camera_lifecycle_unlock();
+            return false;
+        }
     }
     for (int i = 0; i < EXAMPLE_CAM_BUF_NUM; i++) {
         if (cam->_cam_buffer[i] != nullptr) {
@@ -300,15 +394,14 @@ void Camera::releasePreviewPsramBuffers(void)
     if (camera_event_group != nullptr) {
         xEventGroupClearBits(camera_event_group, CAMERA_EVENT_DELETE);
     }
+    camera_lifecycle_unlock();
+    return true;
 }
 
 bool Camera::ensureJpegEncoderForHw(void)
 {
     if (s_camera_hw_singleton == nullptr) {
         return false;
-    }
-    if (s_camera_hw_singleton->_jpeg_enc != nullptr) {
-        return true;
     }
     return s_camera_hw_singleton->init_jpeg_encoder();
 }
@@ -391,7 +484,9 @@ Camera::Camera(uint16_t hor_res, uint16_t ver_res):
     _img_album_dsc_size(hor_res > ver_res ? ver_res : hor_res),
     _img_album_buffer(NULL),
     _camera_init_sem(NULL),
-    _camera_ctlr_handle(0),
+    _camera_init_task_handle(NULL),
+    _camera_init_completed(false),
+    _camera_ctlr_handle(-1),
     _jpeg_enc(nullptr),
     _jpeg_out_buf(nullptr),
     _jpeg_out_cap(0)
@@ -418,24 +513,35 @@ bool Camera::run(void)
         ESP_LOGW(TAG, "JPEG encoder init failed; photo save disabled");
     }
 
-    if (_camera_init_sem == NULL) {
-        _camera_init_sem = xSemaphoreCreateBinary();
-        assert(_camera_init_sem != NULL);
-
-        xTaskCreatePinnedToCore((TaskFunction_t)taskCameraInit, "Camera Init", 4096, this, 2, NULL, 0);
-        if (xSemaphoreTake(_camera_init_sem, pdMS_TO_TICKS(CAMERA_INIT_TASK_WAIT_MS)) != pdTRUE) {
-            ESP_LOGE(TAG, "Camera init timeout");
-            vSemaphoreDelete(_camera_init_sem);
-            _camera_init_sem = NULL;
+    if (!_camera_init_completed) {
+        if (_camera_init_sem == nullptr) {
+            ESP_LOGE(TAG, "Camera init semaphore unavailable");
             return false;
         }
-        vSemaphoreDelete(_camera_init_sem);
-        _camera_init_sem = NULL;
+        if (_camera_init_task_handle == nullptr) {
+            while (xSemaphoreTake(_camera_init_sem, 0) == pdTRUE) {
+            }
+            if (xTaskCreatePinnedToCore((TaskFunction_t)taskCameraInit, "Camera Init", 4096, this, 2,
+                                        &_camera_init_task_handle, 0) != pdPASS) {
+                ESP_LOGE(TAG, "Camera init task create failed");
+                _camera_init_task_handle = nullptr;
+                return false;
+            }
+        }
+        if (xSemaphoreTake(_camera_init_sem, pdMS_TO_TICKS(CAMERA_INIT_TASK_WAIT_MS)) != pdTRUE) {
+            ESP_LOGE(TAG, "Camera init timeout; task will finish safely in background");
+            return false;
+        }
+        if (!_camera_init_completed) {
+            ESP_LOGE(TAG, "Camera init failed; next open will retry");
+            return false;
+        }
     }
 
     /* After MJPEG player stops the stream, reopening Camera must restart CSI without re-running Init task. */
     if (!ensurePreviewStreaming()) {
-        ESP_LOGW(TAG, "ensurePreviewStreaming failed (preview may be black)");
+        ESP_LOGE(TAG, "ensurePreviewStreaming failed");
+        return false;
     }
 
     xEventGroupSetBits(camera_event_group, CAMERA_EVENT_TASK_RUN);
@@ -523,7 +629,7 @@ bool Camera::close(void)
     xEventGroupSetBits(camera_event_group, CAMERA_EVENT_DELETE);
 
     setPreviewCanvasOverride(nullptr);
-    releasePreviewPsramBuffers();
+    (void)releasePreviewPsramBuffers();
 
     s_cam_instance = nullptr;
     deinit_jpeg_encoder();
@@ -533,6 +639,11 @@ bool Camera::close(void)
         _img_album_buffer = NULL;
     }
 
+    /* Reserve contiguous CSI memory again while the UI album buffer has just been freed. */
+    if (!preallocateCaptureBuffers()) {
+        ESP_LOGW(TAG, "close: unable to reserve capture buffers for next open");
+    }
+
     return true;
 }
 
@@ -540,19 +651,44 @@ bool Camera::init(void)
 {
     s_camera_hw_singleton = this;
 
+    if (s_camera_lifecycle_mutex == nullptr) {
+        s_camera_lifecycle_mutex = xSemaphoreCreateRecursiveMutex();
+    }
+    if (s_jpeg_enc_mutex == nullptr) {
+        s_jpeg_enc_mutex = xSemaphoreCreateMutex();
+    }
+    if (_camera_init_sem == nullptr) {
+        _camera_init_sem = xSemaphoreCreateBinary();
+    }
+    if (s_camera_lifecycle_mutex == nullptr || s_jpeg_enc_mutex == nullptr ||
+        _camera_init_sem == nullptr) {
+        ESP_LOGE(TAG, "camera synchronization allocation failed");
+        return false;
+    }
+
     if (s_snapshot_sem == nullptr) {
         s_snapshot_sem = xSemaphoreCreateBinary();
-        assert(s_snapshot_sem != nullptr);
+        if (s_snapshot_sem == nullptr) {
+            ESP_LOGE(TAG, "snapshot semaphore allocation failed");
+            return false;
+        }
     }
 
     camera_event_group = xEventGroupCreate();
+    if (camera_event_group == nullptr) {
+        ESP_LOGE(TAG, "camera event group allocation failed");
+        return false;
+    }
     xEventGroupClearBits(camera_event_group, CAMERA_EVENT_TASK_RUN);
     xEventGroupClearBits(camera_event_group, CAMERA_EVENT_DELETE);
 
     if (s_cam_work_queue == nullptr) {
         s_cam_work_queue = xQueueCreate(2, sizeof(cam_work_item_t));
-        assert(s_cam_work_queue != nullptr);
-        xTaskCreate(camera_worker_task, "cam_worker", 8192, nullptr, 5, nullptr);
+        if (s_cam_work_queue == nullptr ||
+            xTaskCreate(camera_worker_task, "cam_worker", 8192, nullptr, 5, nullptr) != pdPASS) {
+            ESP_LOGE(TAG, "camera worker allocation failed");
+            return false;
+        }
     }
 
     i2c_master_bus_handle_t i2c_bus_handle = bsp_i2c_get_handle();
@@ -573,17 +709,45 @@ bool Camera::init(void)
         }
     }
 
-    ESP_ERROR_CHECK(esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &data_cache_line_size));
-    /* Defer ~7MB CSI framebufs until Camera/SoTi preview; keep PSRAM free for MJPEG. */
+    ret = esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &data_cache_line_size);
+    if (ret != ESP_OK || data_cache_line_size == 0) {
+        ESP_LOGE(TAG, "camera cache alignment unavailable: %s", esp_err_to_name(ret));
+        return false;
+    }
+    if (!preallocateCaptureBuffers()) {
+        ESP_LOGW(TAG, "camera buffers not reserved at boot; first open will retry");
+    }
 
     // Register the video frame operation callback
-    ESP_ERROR_CHECK(app_video_register_frame_operation_cb(camera_video_frame_operation));
+    ret = app_video_register_frame_operation_cb(camera_video_frame_operation);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "camera frame callback registration failed: %s", esp_err_to_name(ret));
+        return false;
+    }
 
     return true;
 }
 
 bool Camera::init_jpeg_encoder(void)
 {
+    if (!jpeg_encoder_lock()) {
+        ESP_LOGE(TAG, "JPEG encoder mutex timeout during init");
+        return false;
+    }
+    if (_jpeg_enc != nullptr && _jpeg_out_buf != nullptr) {
+        jpeg_encoder_unlock();
+        return true;
+    }
+    if (_jpeg_out_buf != nullptr) {
+        heap_caps_free(_jpeg_out_buf);
+        _jpeg_out_buf = nullptr;
+        _jpeg_out_cap = 0;
+    }
+    if (_jpeg_enc != nullptr) {
+        jpeg_del_encoder_engine(_jpeg_enc);
+        _jpeg_enc = nullptr;
+    }
+
     jpeg_encode_engine_cfg_t encode_eng_cfg = {
         .intr_priority = 0,
         .timeout_ms = 5000,
@@ -592,6 +756,7 @@ bool Camera::init_jpeg_encoder(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "jpeg_new_encoder_engine failed: %s", esp_err_to_name(err));
         _jpeg_enc = nullptr;
+        jpeg_encoder_unlock();
         return false;
     }
 
@@ -604,6 +769,7 @@ bool Camera::init_jpeg_encoder(void)
         ESP_LOGE(TAG, "jpeg_alloc_encoder_mem failed");
         jpeg_del_encoder_engine(_jpeg_enc);
         _jpeg_enc = nullptr;
+        jpeg_encoder_unlock();
         return false;
     }
 
@@ -613,11 +779,16 @@ bool Camera::init_jpeg_encoder(void)
     _jpeg_enc_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
     _jpeg_enc_cfg.image_quality = 85;
 
+    jpeg_encoder_unlock();
     return true;
 }
 
 void Camera::deinit_jpeg_encoder(void)
 {
+    if (!jpeg_encoder_lock()) {
+        ESP_LOGE(TAG, "JPEG encoder mutex timeout during deinit; keep hardware alive");
+        return;
+    }
     if (_jpeg_out_buf != nullptr) {
         heap_caps_free(_jpeg_out_buf);
         _jpeg_out_buf = nullptr;
@@ -627,6 +798,7 @@ void Camera::deinit_jpeg_encoder(void)
         jpeg_del_encoder_engine(_jpeg_enc);
         _jpeg_enc = nullptr;
     }
+    jpeg_encoder_unlock();
 }
 
 bool Camera::jpegEncodeFrameSized(const uint8_t *rgb565, size_t len, uint16_t w, uint16_t h, uint32_t *jpeg_size_out)
@@ -640,15 +812,6 @@ bool Camera::jpegEncodeFrameSized(const uint8_t *rgb565, size_t len, uint16_t w,
         ESP_LOGE(TAG, "jpegEncodeFrameSized bad len/w/h");
         return false;
     }
-    if (s_jpeg_enc_mutex == nullptr) {
-        s_jpeg_enc_mutex = xSemaphoreCreateMutex();
-    }
-    if (s_jpeg_enc_mutex == nullptr ||
-        xSemaphoreTake(s_jpeg_enc_mutex, pdMS_TO_TICKS(12000)) != pdTRUE) {
-        ESP_LOGE(TAG, "JPEG encoder mutex");
-        return false;
-    }
-
     const uint16_t prev_w = _jpeg_enc_cfg.width;
     const uint16_t prev_h = _jpeg_enc_cfg.height;
     _jpeg_enc_cfg.width = w;
@@ -660,7 +823,6 @@ bool Camera::jpegEncodeFrameSized(const uint8_t *rgb565, size_t len, uint16_t w,
 
     _jpeg_enc_cfg.width = prev_w;
     _jpeg_enc_cfg.height = prev_h;
-    xSemaphoreGive(s_jpeg_enc_mutex);
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "jpeg_encoder_process failed: %s", esp_err_to_name(err));
@@ -707,15 +869,26 @@ bool Camera::writeLastJpegToSd(uint32_t jpeg_size)
 
 bool Camera::save_jpeg_to_sd(const uint8_t *rgb565, size_t len)
 {
-    uint32_t jpeg_size = 0;
-    if (!jpegEncodeFrame(rgb565, len, &jpeg_size)) {
+    if (!jpeg_encoder_lock()) {
+        ESP_LOGE(TAG, "save JPEG encoder mutex timeout");
         return false;
     }
-    return writeLastJpegToSd(jpeg_size);
+    uint32_t jpeg_size = 0;
+    if (!jpegEncodeFrame(rgb565, len, &jpeg_size)) {
+        jpeg_encoder_unlock();
+        return false;
+    }
+    bool ok = writeLastJpegToSd(jpeg_size);
+    jpeg_encoder_unlock();
+    return ok;
 }
 
 bool Camera::encodeSoTiSnapshotFromFrame(const uint8_t *rgb565, size_t len)
 {
+    if (!jpeg_encoder_lock()) {
+        ESP_LOGE(TAG, "SoTi JPEG encoder mutex timeout");
+        return false;
+    }
     uint32_t jpeg_size = 0;
     const uint8_t prev_q = _jpeg_enc_cfg.image_quality;
     /* 搜题经 SDIO Wi‑Fi 上传：强压画质换更小 body（服务器侧还可二值化再送豆包）。 */
@@ -723,9 +896,11 @@ bool Camera::encodeSoTiSnapshotFromFrame(const uint8_t *rgb565, size_t len)
     const bool ok = jpegEncodeFrame(rgb565, len, &jpeg_size);
     _jpeg_enc_cfg.image_quality = prev_q;
     if (!ok) {
+        jpeg_encoder_unlock();
         return false;
     }
     stashSoTiUploadCopy(_jpeg_out_buf, jpeg_size);
+    jpeg_encoder_unlock();
     return true;
 }
 
@@ -738,12 +913,13 @@ bool Camera::encodeRgb565ToJpegMalloc(const uint8_t *rgb565, size_t rgb_len, uin
     *jpeg_out = nullptr;
     *jpeg_len_out = 0;
     Camera *cam = s_camera_hw_singleton;
-    if (cam == nullptr || cam->_jpeg_enc == nullptr) {
+    if (cam == nullptr || !jpeg_encoder_lock()) {
         ESP_LOGE(TAG, "encodeRgb565ToJpegMalloc: no encoder");
         return false;
     }
     uint32_t jpeg_size = 0;
     if (!cam->jpegEncodeFrameSized(rgb565, rgb_len, w, h, &jpeg_size) || jpeg_size == 0) {
+        jpeg_encoder_unlock();
         return false;
     }
     uint8_t *copy = (uint8_t *)heap_caps_malloc(jpeg_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -752,9 +928,11 @@ bool Camera::encodeRgb565ToJpegMalloc(const uint8_t *rgb565, size_t rgb_len, uin
     }
     if (copy == nullptr) {
         ESP_LOGE(TAG, "JPEG output malloc failed");
+        jpeg_encoder_unlock();
         return false;
     }
     memcpy(copy, cam->_jpeg_out_buf, jpeg_size);
+    jpeg_encoder_unlock();
     *jpeg_out = copy;
     *jpeg_len_out = jpeg_size;
     return true;
@@ -779,46 +957,19 @@ void Camera::apply_album_thumbnail_ui(void)
 
 void Camera::taskCameraInit(Camera *app)
 {
-    /*
-     * close() calls releasePreviewPsramBuffers() which frees _cam_buffer[]. On the next run(),
-     * this task is spawned again (see run()); we must realloc before app_video_set_bufs or it
-     * fails with "frame buffer is NULL" and aborts.
-     */
-    if (!allocateCaptureBuffersIfNeeded()) {
-        ESP_LOGE(TAG, "taskCameraInit: capture buffers unavailable (reopen after close?)");
-        xSemaphoreGive(app->_camera_init_sem);
-        vTaskDelete(NULL);
-        return;
+    bool ok = app != nullptr && ensurePreviewStreaming();
+    if (!ok) {
+        ESP_LOGE(TAG, "camera init task could not start preview");
     }
-
-    /*
-     * SoTi (or any prior preview user) may already be streaming. VIDIOC_REQBUFS / QBUF must not run
-     * while the stream task is active — driver + CSI DMA keep old user pointers → fault on overlap.
-     */
-    const int ctlr_fd = app->_camera_ctlr_handle;
-    if (ctlr_fd >= 0 && app_video_stream_task_is_active()) {
-        ESP_LOGI(TAG, "taskCameraInit: stop existing stream before set_bufs (SoTi→Camera handoff)");
-        ESP_ERROR_CHECK(app_video_stream_task_stop(ctlr_fd));
-        ESP_ERROR_CHECK(app_video_stream_wait_stop(0));
-        s_camera_stream_running = false;
+    if (app != nullptr) {
+        app->_camera_init_completed = ok;
+        app->_camera_init_task_handle = nullptr;
+        if (app->_camera_init_sem != nullptr) {
+            xSemaphoreGive(app->_camera_init_sem);
+        }
     }
-
-    ESP_ERROR_CHECK(app_video_set_bufs(app->_camera_ctlr_handle, EXAMPLE_CAM_BUF_NUM, (const void **)app->_cam_buffer));
-
-    ESP_LOGI(TAG, "Start camera stream task");
-    esp_err_t es = app_video_stream_task_start(app->_camera_ctlr_handle, 0);
-    if (es != ESP_OK) {
-        ESP_LOGE(TAG, "taskCameraInit: stream task start failed");
-        s_camera_stream_running = false;
-        xSemaphoreGive(app->_camera_init_sem);
-        vTaskDelete(NULL);
-        return;
-    }
-    s_camera_stream_running = true;
-
-    xSemaphoreGive(app->_camera_init_sem);
-
-    vTaskDelete(NULL);
+    vTaskDelete(nullptr);
+    return;
 }
 
 void Camera::onScreenCameraShotAlbumClick(lv_event_t *e)

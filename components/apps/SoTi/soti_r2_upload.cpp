@@ -663,7 +663,7 @@ extern "C" esp_err_t soti_upload_jpeg_to_worker(
             vTaskDelay(pdMS_TO_TICKS(ms));
         }
         int w = esp_http_client_write(client, out_ptr, chunk);
-        if (w < 0) {
+        if (w <= 0) {
             ESP_LOGE(TAG, "http write failed at %d/%d (peer RST? check Nginx/burst)", written, to_write);
             (void)esp_wifi_set_ps(saved_ps);
             heap_caps_free(stage);

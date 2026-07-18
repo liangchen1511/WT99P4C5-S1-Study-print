@@ -11,6 +11,7 @@
 #include "esp_private/esp_cache_private.h"
 #include "esp_dma_utils.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "driver/jpeg_decode.h"
 #include "media_src_storage.h"
@@ -21,11 +22,11 @@
 #define CACHE_BUF_ALIGN         (1024)
 
 #define ALIGN_UP(num, align)    (((num) + ((align) - 1)) & ~((align) - 1))
-#define ALIGN_DOWN(num, align)    (((num) - ((align) + 1)) & ~((align) - 1))
 
 static const char *TAG = "esp_lvgl_player";
 static const uint16_t EOI = 0xd9ff; /* End of image */
-static BaseType_t player_task_handle = NULL;
+static TaskHandle_t player_task_handle = NULL;
+static SemaphoreHandle_t player_task_done_sem = NULL;
 
 typedef struct
 {
@@ -304,14 +305,24 @@ static lv_obj_t * create_lvgl_objects(lv_obj_t * screen)
 static esp_err_t get_video_size(uint32_t * width, uint32_t * height)
 {
     esp_err_t err;
-    jpeg_decode_picture_info_t header;
-    assert(width && height);
+    jpeg_decode_picture_info_t header = {0};
+    if (width == NULL || height == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *width = 0;
+    *height = 0;
 
     int size = media_src_storage_read(&player_ctx.file, player_ctx.cache_buff, player_ctx.cache_buff_size);
-    if(size < 0)
+    if (size <= 0) {
         return ESP_ERR_INVALID_SIZE;
+    }
 
     err = jpeg_decoder_get_info(player_ctx.cache_buff, size, &header);
+    if (err != ESP_OK || header.width == 0 || header.height == 0) {
+        ESP_LOGE(TAG, "Invalid first JPEG frame: %s, %" PRIu32 "x%" PRIu32,
+                 esp_err_to_name(err), header.width, header.height);
+        return err == ESP_OK ? ESP_ERR_INVALID_SIZE : err;
+    }
 
     ESP_LOGI(TAG, "header parsed, width is %" PRId32 ", height is %" PRId32 ", size is %d", header.width, header.height, size);
 
@@ -334,6 +345,7 @@ static void video_decoder_deinit(void)
 {
     if (player_ctx.jpeg) {
         jpeg_del_decoder_engine(player_ctx.jpeg);
+        player_ctx.jpeg = NULL;
     }
 }
 
@@ -350,58 +362,69 @@ static uint8_t * video_decoder_malloc(uint32_t size, bool inbuff, uint32_t * out
 
 static int video_decoder_read_jpeg_image(uint32_t *file_seek_start, uint32_t *file_seek_offset)
 {
-    uint32_t read_size = 0;
     uint32_t jpeg_image_size = 0;
-    uint8_t * match = NULL;
-    uint8_t *cache_buff = player_ctx.cache_buff;
-    uint8_t *cache_buff_offset = NULL;
-    uint32_t cache_buff_size = player_ctx.cache_buff_size;
-    uint32_t seek_pos_offset = *file_seek_offset;
-    uint32_t seek_pos_cur = *file_seek_start;
-    uint32_t seek_pos_next = 0;
+    uint64_t file_pos = (uint64_t)(*file_seek_start) + (uint64_t)(*file_seek_offset);
 
-    // if (seek_pos_cur % CACHE_BUF_ALIGN != 0) {
-    //     ESP_LOGE(TAG, "File seek start is not aligned to %d", CACHE_BUF_ALIGN);
-    //     return 0;
-    // }
+    if (player_ctx.in_buff == NULL || player_ctx.cache_buff == NULL ||
+        player_ctx.in_buff_size == 0 || player_ctx.cache_buff_size == 0 ||
+        media_src_storage_seek(&player_ctx.file, file_pos) != 0) {
+        ESP_LOGE(TAG, "JPEG reader is not ready or seek failed");
+        return -1;
+    }
 
-    while (match == NULL) {
-        read_size = media_src_storage_read(&player_ctx.file, cache_buff, cache_buff_size) - seek_pos_offset;
-        if (read_size <= 0) {
-            break;
+    for (;;) {
+        int nread = media_src_storage_read(&player_ctx.file, player_ctx.cache_buff,
+                                           player_ctx.cache_buff_size);
+        if (nread < 0) {
+            ESP_LOGE(TAG, "JPEG read failed");
+            return -1;
+        }
+        if (nread == 0) {
+            if (jpeg_image_size == 0) {
+                return 0;
+            }
+            ESP_LOGE(TAG, "Truncated JPEG frame without EOI");
+            return -1;
         }
 
-        cache_buff_offset = cache_buff + seek_pos_offset;
+        uint32_t copy_size = (uint32_t)nread;
+        bool found_eoi = false;
 
-        /* Search for EOI. */
-        match = memmem(cache_buff_offset, read_size, &EOI, 2);
-        if(match) {
-            read_size = (uint32_t)((match + 2) - cache_buff_offset);
+        /* Handle an EOI marker split across two cache reads. */
+        if (jpeg_image_size > 0 && player_ctx.in_buff[jpeg_image_size - 1] == 0xff &&
+            player_ctx.cache_buff[0] == 0xd9) {
+            copy_size = 1;
+            found_eoi = true;
+        } else {
+            uint8_t *match = memmem(player_ctx.cache_buff, (size_t)nread, &EOI, 2);
+            if (match != NULL) {
+                copy_size = (uint32_t)((match + 2) - player_ctx.cache_buff);
+                found_eoi = true;
+            }
         }
 
-        memcpy(player_ctx.in_buff + jpeg_image_size, cache_buff_offset, read_size);
-        jpeg_image_size += read_size;
+        /* Check before memcpy; the old code checked only after corrupting the heap. */
+        if (copy_size > player_ctx.in_buff_size - jpeg_image_size) {
+            ESP_LOGE(TAG, "JPEG frame exceeds input buffer (%u + %u > %u)",
+                     (unsigned)jpeg_image_size, (unsigned)copy_size,
+                     (unsigned)player_ctx.in_buff_size);
+            return -1;
+        }
 
-        seek_pos_next = ALIGN_DOWN(seek_pos_cur + seek_pos_offset + read_size, CACHE_BUF_ALIGN);
-        seek_pos_cur = seek_pos_cur + seek_pos_offset + read_size;
-        seek_pos_offset = seek_pos_cur - seek_pos_next;
-        media_src_storage_seek(&player_ctx.file, seek_pos_next);
-        seek_pos_cur = seek_pos_next;
+        memcpy(player_ctx.in_buff + jpeg_image_size, player_ctx.cache_buff, copy_size);
+        jpeg_image_size += copy_size;
+        file_pos += copy_size;
 
+        if (found_eoi) {
+            if (file_pos > UINT32_MAX || media_src_storage_seek(&player_ctx.file, file_pos) != 0) {
+                ESP_LOGE(TAG, "JPEG next-frame seek failed");
+                return -1;
+            }
+            *file_seek_start = (uint32_t)file_pos;
+            *file_seek_offset = 0;
+            return (int)jpeg_image_size;
+        }
     }
-    if (jpeg_image_size > player_ctx.in_buff_size) {
-        ESP_LOGE(TAG, "JPEG image size is bigger than input buffer size");
-        jpeg_image_size = -1;
-    }
-    *file_seek_start = seek_pos_next;
-    *file_seek_offset = seek_pos_offset;
-
-    // if (seek_pos_next % CACHE_BUF_ALIGN != 0) {
-    //     ESP_LOGE(TAG, "File seek next is not aligned to %d", CACHE_BUF_ALIGN);
-    //     return 0;
-    // }
-
-    return jpeg_image_size;
 }
 
 static int video_decoder_decode(uint32_t jpeg_image_size)
@@ -413,6 +436,10 @@ static int video_decoder_decode(uint32_t jpeg_image_size)
     if (jpeg_image_size_aligned > player_ctx.in_buff_size) {
         ESP_LOGE(TAG, "JPEG image size is bigger than input buffer size");
         return -1;
+    }
+    if (jpeg_image_size_aligned > jpeg_image_size) {
+        memset(player_ctx.in_buff + jpeg_image_size, 0,
+               jpeg_image_size_aligned - jpeg_image_size);
     }
 
     /* Decode JPEG */
@@ -624,6 +651,9 @@ err:
     ESP_LOGI(TAG, "Video player task finished.");
 
     /* Close task */
+    if (player_task_done_sem != NULL) {
+        xSemaphoreGive(player_task_done_sem);
+    }
     vTaskDelete(NULL);
 }
 
@@ -633,6 +663,11 @@ lv_obj_t * esp_lvgl_simple_player_create(esp_lvgl_simple_player_cfg_t * params)
     ESP_RETURN_ON_FALSE(params->screen, NULL, TAG, "LVGL screen must be filled");
     ESP_RETURN_ON_FALSE(params->buff_size, NULL, TAG, "Size of the video frame buffer must be filled");
     ESP_RETURN_ON_FALSE(params->screen_width > 0 && params->screen_height > 0, NULL, TAG, "Object size must be filled");
+
+    if (player_task_done_sem == NULL) {
+        player_task_done_sem = xSemaphoreCreateBinary();
+        ESP_RETURN_ON_FALSE(player_task_done_sem != NULL, NULL, TAG, "Create player completion semaphore failed");
+    }
 
     player_ctx.video_path = params->video_path;
     player_ctx.bgm_path = params->bgm_path;
@@ -735,7 +770,13 @@ void esp_lvgl_simple_player_play(void)
         }
         ESP_LOGI(TAG, "Player starting playing.");
         /* Create video task */
-        xTaskCreate(show_video_task, "video task", 8 * 1024, NULL, 4, &player_task_handle);
+        while (xSemaphoreTake(player_task_done_sem, 0) == pdTRUE) {
+        }
+        if (xTaskCreate(show_video_task, "video task", 8 * 1024, NULL, 4,
+                        &player_task_handle) != pdPASS) {
+            player_task_handle = NULL;
+            ESP_LOGE(TAG, "Create video task failed");
+        }
     } else if(player_ctx.state == PLAYER_STATE_PAUSED) {
         esp_lvgl_simple_player_resume();
     }
@@ -901,17 +942,18 @@ esp_err_t esp_lvgl_simple_player_wait_task_stop(int timeout_ms)
         return ESP_OK;
     }
 
-    uint32_t i = 0;
-    while (eTaskGetState(player_task_handle) != eDeleted && (timeout_ms < 0 || i < timeout_ms)) {
-        vTaskDelay(pdMS_TO_TICKS(1));
-        i++;
+    if (player_task_done_sem == NULL) {
+        ESP_LOGE(TAG, "Player completion semaphore missing");
+        return ESP_ERR_INVALID_STATE;
     }
-    player_task_handle = NULL;
 
-    if (i >= timeout_ms) {
+    TickType_t wait_ticks = (timeout_ms < 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    if (xSemaphoreTake(player_task_done_sem, wait_ticks) != pdTRUE) {
         ESP_LOGE(TAG, "Player task stop timeout");
         return ESP_ERR_TIMEOUT;
     }
 
+    /* Clear the handle only after the task has released all decoder/buffer resources. */
+    player_task_handle = NULL;
     return ESP_OK;
 }

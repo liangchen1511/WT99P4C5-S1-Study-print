@@ -8,11 +8,12 @@ dependencies:
     version: "0.8.*"
     public: true
   espressif/esp_wifi_remote:
-    version: "*"
+    version: "~1.5.1"
     rules:
       - if: "target in [esp32p4, esp32h2]"
   espressif/esp_hosted:
-    version: "*"
+    # 2.12.x Kconfig uses $(ESP_IDF_VERSION)>=6.1; IDF 5.5 needs cmake patch
+    version: "2.12.9"
     rules:
       - if: "target in [esp32p4, esp32h2]"
   espressif/esp_jpeg:

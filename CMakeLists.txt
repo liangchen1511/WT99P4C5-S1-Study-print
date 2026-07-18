@@ -23,4 +23,8 @@ add_compile_options(
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-enum-enum-conversion")
+
+# Must run before project(): patches managed Kconfig used during confgen.
+include(${CMAKE_CURRENT_LIST_DIR}/tools/cmake/patch_esp_hosted_sdio.cmake)
+
 project(wt99p4c5_s1_board)

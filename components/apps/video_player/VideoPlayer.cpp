@@ -88,7 +88,12 @@ bool AppVideoPlayer::run(void)
     /* Free CSI DMA/PSRAM + JPEG encoder before HW MJPEG decode (rxlink needs INTERNAL DMA) */
     Camera::setFrameProcessingEnabled(false);
     Camera::releaseJpegEncoderHw();
-    Camera::releasePreviewPsramBuffers();
+    if (!Camera::releasePreviewPsramBuffers()) {
+        ESP_LOGE(TAG, "camera stream did not release; refuse to race MJPEG decoder");
+        (void)Camera::ensureJpegEncoderForHw();
+        Camera::setFrameProcessingEnabled(true);
+        return false;
+    }
     parent_chat_bg_poll_stop();
     parent_chat_bg_poll_wait_stop(2000);
     parent_policy_poll_pause(true);
@@ -129,6 +134,9 @@ bool AppVideoPlayer::close(void)
     parent_policy_poll_pause(false);
     parent_chat_bg_poll_start();
     Camera::setFrameProcessingEnabled(true);
+    if (!Camera::preallocateCaptureBuffers()) {
+        ESP_LOGW(TAG, "camera buffers could not be reserved after video close");
+    }
 
     return true;
 }

@@ -7,6 +7,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "lvgl.h"
 #include "esp_brookesia.hpp"
 #include "app_video.h"
@@ -40,10 +41,13 @@ public:
     static bool ensurePreviewStreaming(void);
 
     /** Stop stream task so DQBUF/QBUF cannot wedge after preview pause (e.g. before MJPEG play). */
-    static void stopPreviewStreamingIfRunning(void);
+    static bool stopPreviewStreamingIfRunning(void);
 
     /** Stop stream and free CSI frame buffers in PSRAM (e.g. before large MJPEG decode framebuffer). */
-    static void releasePreviewPsramBuffers(void);
+    static bool releasePreviewPsramBuffers(void);
+
+    /** Reserve the three large CSI buffers while PSRAM has contiguous space. */
+    static bool preallocateCaptureBuffers(void);
 
     static bool ensureJpegEncoderForHw(void);
 
@@ -99,6 +103,8 @@ private:
     uint32_t _img_album_buf_bytes;
     uint8_t *_img_album_buffer;
     SemaphoreHandle_t _camera_init_sem;
+    TaskHandle_t _camera_init_task_handle;
+    bool _camera_init_completed;
     int _camera_ctlr_handle;
     lv_img_dsc_t _img_refresh_dsc;
     lv_img_dsc_t _img_album_dsc;
@@ -112,4 +118,3 @@ private:
     size_t _jpeg_out_cap;
     jpeg_encode_cfg_t _jpeg_enc_cfg;
 };
-

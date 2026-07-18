@@ -164,6 +164,14 @@ exit_0:
     return -1;
 }
 
+esp_err_t app_video_close(int video_fd)
+{
+    if (video_fd < 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return close(video_fd) == 0 ? ESP_OK : ESP_FAIL;
+}
+
 esp_err_t app_video_set_bufs(int video_fd, uint32_t fb_num, const void **fb)
 {
     if (fb_num > MAX_BUFFER_COUNT) {
@@ -225,7 +233,13 @@ esp_err_t app_video_set_bufs(int video_fd, uint32_t fb_num, const void **fb)
     return ESP_OK;
 
 errout_req_bufs:
-    close(video_fd);
+    /* Do not close video_fd here. The owner retains the descriptor and may
+     * release/rebind buffers or explicitly reopen after a transient failure. */
+    req.count = 0;
+    (void)ioctl(video_fd, VIDIOC_REQBUFS, &req);
+    for (int i = 0; i < MAX_BUFFER_COUNT; i++) {
+        app_camera_video.camera_buffer[i] = NULL;
+    }
     return ESP_FAIL;
 }
 
@@ -300,6 +314,12 @@ errout:
 
 static inline void video_operation_video_frame(int video_fd)
 {
+    if (app_camera_video.v4l2_buf.index >= MAX_BUFFER_COUNT ||
+        app_camera_video.camera_buffer[app_camera_video.v4l2_buf.index] == NULL ||
+        app_camera_video.user_camera_video_frame_operation_cb == NULL) {
+        ESP_LOGE(TAG, "drop invalid camera frame index=%u", (unsigned)app_camera_video.v4l2_buf.index);
+        return;
+    }
     app_camera_video.v4l2_buf.m.userptr = (unsigned long)app_camera_video.camera_buffer[app_camera_video.v4l2_buf.index];
     app_camera_video.v4l2_buf.length = app_camera_video.camera_buf_size;
 
@@ -439,6 +459,10 @@ esp_err_t app_video_stream_task_start(int video_fd, int core_id)
     if(app_camera_video.video_event_group == NULL) {
         app_camera_video.video_event_group = xEventGroupCreate();
     }
+    if (app_camera_video.video_event_group == NULL) {
+        ESP_LOGE(TAG, "failed to create video event group");
+        return ESP_ERR_NO_MEM;
+    }
     xEventGroupClearBits(app_camera_video.video_event_group, VIDEO_TASK_DELETE_DONE);
 
     app_camera_video.stream_task_video_fd = video_fd;
@@ -475,6 +499,13 @@ errout:
 
 esp_err_t app_video_stream_task_stop(int video_fd)
 {
+    if (video_fd < 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (app_camera_video.video_event_group == NULL ||
+        app_camera_video.video_stream_task_handle == NULL) {
+        return ESP_OK;
+    }
     xEventGroupSetBits(app_camera_video.video_event_group, VIDEO_TASK_DELETE);
 
     return ESP_OK;
@@ -489,6 +520,10 @@ esp_err_t app_video_register_frame_operation_cb(app_video_frame_operation_cb_t o
 
 esp_err_t app_video_stream_wait_stop(uint32_t timeout_ms)
 {
+    if (app_camera_video.video_event_group == NULL ||
+        app_camera_video.video_stream_task_handle == NULL) {
+        return ESP_OK;
+    }
     const TickType_t ticks =
         (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
     EventBits_t bits = xEventGroupWaitBits(app_camera_video.video_event_group,

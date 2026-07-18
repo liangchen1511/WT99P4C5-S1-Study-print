@@ -97,6 +97,28 @@ static char *strdup_fallback(const char *s)
     return p;
 }
 
+static soti_print_sections_t *alloc_print_sections(void)
+{
+    soti_print_sections_t *p = (soti_print_sections_t *)heap_caps_calloc(
+        1, sizeof(soti_print_sections_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (p == nullptr) {
+        p = (soti_print_sections_t *)calloc(1, sizeof(soti_print_sections_t));
+    }
+    return p;
+}
+
+static soti_async_pack_t *alloc_async_pack(void)
+{
+    /* Contains a 12 KB print cache; the generic allocator otherwise keeps it
+     * internal because CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL is 16 KB. */
+    soti_async_pack_t *p = (soti_async_pack_t *)heap_caps_calloc(
+        1, sizeof(soti_async_pack_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (p == nullptr) {
+        p = (soti_async_pack_t *)calloc(1, sizeof(soti_async_pack_t));
+    }
+    return p;
+}
+
 static void soti_apply_zh_font_22(lv_obj_t *obj)
 {
     if (obj == nullptr) {
@@ -284,7 +306,7 @@ static void soti_upload_task(void *arg)
         }
         if (app != nullptr) {
             app->clearRequestInflight();
-            soti_async_pack_t *p = (soti_async_pack_t *)calloc(1, sizeof(soti_async_pack_t));
+            soti_async_pack_t *p = alloc_async_pack();
             if (p != nullptr) {
                 p->app = app;
                 p->text = strdup_fallback("内存不足");
@@ -310,10 +332,11 @@ static void soti_upload_task(void *arg)
         return;
     }
 
-    soti_print_sections_t print_sec = {};
+    /* This structure is over 12 KB. Keep it off the HTTP task stack. */
+    soti_print_sections_t *print_sec = alloc_print_sections();
     ESP_LOGI(TAG, "upload: calling worker (one photo, may use multiple HTTP connections if segmented)");
     esp_err_t e = soti_upload_jpeg_to_worker(
-        jpeg, len, abuf, 16384, mode_q[0] != '\0' ? mode_q : "solve", &print_sec);
+        jpeg, len, abuf, 16384, mode_q[0] != '\0' ? mode_q : "solve", print_sec);
     ESP_LOGI(TAG, "upload: worker done err=%s", esp_err_to_name(e));
 
     if (jpeg != nullptr) {
@@ -323,28 +346,32 @@ static void soti_upload_task(void *arg)
     char *display = nullptr;
     if (e != ESP_OK && abuf[0] == '\0') {
         display = strdup_fallback("上传失败，请检查网络或 Worker。");
-        soti_print_sections_clear(&print_sec);
+        soti_print_sections_clear(print_sec);
     } else if (abuf[0] == '\0') {
         display = strdup_fallback("（服务器未返回文本）");
-        soti_print_sections_clear(&print_sec);
+        soti_print_sections_clear(print_sec);
     } else {
         display = soti_format_answer_for_display(abuf);
         if (display == nullptr) {
             display = strdup_fallback(abuf);
         }
-        if (!print_sec.has_question && !print_sec.has_with_answer && display != nullptr) {
-            soti_split_print_sections(display, result_mode, &print_sec);
+        if (print_sec != nullptr && !print_sec->has_question && !print_sec->has_with_answer && display != nullptr) {
+            soti_split_print_sections(display, result_mode, print_sec);
         }
     }
     free(abuf);
 
     if (app != nullptr) {
-        soti_async_pack_t *p = (soti_async_pack_t *)calloc(1, sizeof(soti_async_pack_t));
+        soti_async_pack_t *p = alloc_async_pack();
         if (p != nullptr) {
             p->app = app;
             p->text = display;
             p->mode = result_mode;
-            p->print = print_sec;
+            if (print_sec != nullptr) {
+                p->print = *print_sec;
+            } else {
+                soti_print_sections_clear(&p->print);
+            }
             if (p->text != nullptr) {
                 if (lv_async_call(soti_answer_lv_async_cb, p) != LV_RES_OK) {
                     ESP_LOGE(TAG, "lv_async_call(answer) failed");
@@ -361,6 +388,7 @@ static void soti_upload_task(void *arg)
     } else if (display != nullptr) {
         free(display);
     }
+    heap_caps_free(print_sec);
 
     portENTER_CRITICAL(&s_upload_mux);
     s_upload_worker_busy = false;
@@ -391,7 +419,7 @@ static void soti_daily_task(void *arg)
     if (abuf == nullptr) {
         if (app != nullptr) {
             app->clearRequestInflight();
-            soti_async_pack_t *p = (soti_async_pack_t *)calloc(1, sizeof(soti_async_pack_t));
+            soti_async_pack_t *p = alloc_async_pack();
             if (p != nullptr) {
                 p->app = app;
                 p->text = strdup_fallback("内存不足");
@@ -411,34 +439,38 @@ static void soti_daily_task(void *arg)
         return;
     }
 
-    soti_print_sections_t print_sec = {};
-    esp_err_t e = soti_fetch_daily_line(abuf, 4096, &print_sec);
+    soti_print_sections_t *print_sec = alloc_print_sections();
+    esp_err_t e = soti_fetch_daily_line(abuf, 4096, print_sec);
 
     char *display = nullptr;
     if (e != ESP_OK && abuf[0] == '\0') {
         display = strdup_fallback("获取失败，请检查网络。");
-        soti_print_sections_clear(&print_sec);
+        soti_print_sections_clear(print_sec);
     } else if (abuf[0] == '\0') {
         display = strdup_fallback("（服务器未返回文本）");
-        soti_print_sections_clear(&print_sec);
+        soti_print_sections_clear(print_sec);
     } else {
         display = soti_format_answer_for_display(abuf);
         if (display == nullptr) {
             display = strdup_fallback(abuf);
         }
-        if (!print_sec.has_question && !print_sec.has_with_answer && display != nullptr) {
-            soti_split_print_sections(display, SOTI_MODE_DAILY, &print_sec);
+        if (print_sec != nullptr && !print_sec->has_question && !print_sec->has_with_answer && display != nullptr) {
+            soti_split_print_sections(display, SOTI_MODE_DAILY, print_sec);
         }
     }
     free(abuf);
 
     if (app != nullptr) {
-        soti_async_pack_t *p = (soti_async_pack_t *)calloc(1, sizeof(soti_async_pack_t));
+        soti_async_pack_t *p = alloc_async_pack();
         if (p != nullptr) {
             p->app = app;
             p->text = display;
             p->mode = SOTI_MODE_DAILY;
-            p->print = print_sec;
+            if (print_sec != nullptr) {
+                p->print = *print_sec;
+            } else {
+                soti_print_sections_clear(&p->print);
+            }
             if (p->text != nullptr) {
                 if (lv_async_call(soti_answer_lv_async_cb, p) != LV_RES_OK) {
                     free(p->text);
@@ -454,6 +486,7 @@ static void soti_daily_task(void *arg)
     } else if (display != nullptr) {
         free(display);
     }
+    heap_caps_free(print_sec);
 
     parent_album_sync_pause(false);
     parent_print_sync_pause(false);
@@ -872,7 +905,7 @@ void SoTi::startUploadTask(uint8_t *jpeg, size_t jpeg_len, soti_mode_t mode)
     strncpy(ctx->mode, mq, sizeof(ctx->mode) - 1);
     ctx->mode[sizeof(ctx->mode) - 1] = '\0';
 
-    if (xTaskCreate(soti_upload_task, "soti_r2_up", 18 * 1024, ctx, 5, nullptr) != pdPASS) {
+    if (xTaskCreate(soti_upload_task, "soti_r2_up", 28 * 1024, ctx, 5, nullptr) != pdPASS) {
         heap_caps_free(jpeg);
         heap_caps_free(ctx);
         _request_inflight = false;
